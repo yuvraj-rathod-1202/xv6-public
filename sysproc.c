@@ -106,3 +106,10 @@ sys_setscheduler(void)
 
   return 0;
 }
+
+// get the current scheduler type
+int
+sys_getscheduler(void)
+{
+  return current_scheduler;
+}
