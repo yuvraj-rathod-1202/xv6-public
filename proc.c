@@ -14,6 +14,8 @@ struct {
 
 static struct proc *initproc;
 
+int current_scheduler = SCHED_RR;
+
 int nextpid = 1;
 extern void forkret(void);
 extern void trapret(void);
@@ -319,10 +321,46 @@ wait(void)
 //  - swtch to start running that process
 //  - eventually that process transfers control
 //      via swtch back to the scheduler.
+
+struct proc*
+scheduler_RR(void)
+{
+  // RR Scheduler
+}
+
+struct proc*
+scheduler_FCFS(void)
+{
+  // FCFS Scheduler
+}
+
+struct proc*
+scheduler_CFS(void)
+{
+  // CFS Scheduler
+}
+
+struct proc*
+select_process(void)
+{
+  switch(current_scheduler) {
+    case SCHED_RR:
+      return scheduler_RR();
+
+    case SCHED_FIFO:
+      return scheduler_FCFS();
+
+    case SCHED_CFS:
+      return scheduler_CFS();
+
+    default:
+      return scheduler_RR();
+  }
+}
+
 void
 scheduler(void)
 {
-  struct proc *p;
   struct cpu *c = mycpu();
   c->proc = 0;
   
@@ -332,26 +370,22 @@ scheduler(void)
 
     // Loop over process table looking for process to run.
     acquire(&ptable.lock);
-    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-      if(p->state != RUNNABLE)
-        continue;
+    
+    struct proc *p = select_process();
 
-      // Switch to chosen process.  It is the process's job
-      // to release ptable.lock and then reacquire it
-      // before jumping back to us.
+    if(p != 0){
       c->proc = p;
       switchuvm(p);
+
       p->state = RUNNING;
-
+      
       swtch(&(c->scheduler), p->context);
-      switchkvm();
 
-      // Process is done running for now.
-      // It should have changed its p->state before coming back.
+      switchkvm();
       c->proc = 0;
     }
-    release(&ptable.lock);
 
+    release(&ptable.lock);
   }
 }
 

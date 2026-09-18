@@ -89,3 +89,20 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+// Set the scheduler type
+int
+sys_setscheduler(void)
+{
+  int scheduler;
+
+  if(argint(0, &scheduler) < 0)
+    return -1;
+
+  if (scheduler < SCHED_RR || scheduler > SCHED_CFS) {
+    return -1;
+
+  current_scheduler = scheduler;
+
+  return 0;
+}
