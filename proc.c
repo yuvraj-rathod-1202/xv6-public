@@ -370,7 +370,7 @@ select_process(void)
     case SCHED_RR:
       return scheduler_RR();
 
-    case SCHED_FIFO:
+    case SCHED_FCFS:
       return scheduler_FCFS();
 
     // case SCHED_CFS:

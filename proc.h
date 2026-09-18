@@ -39,6 +39,8 @@ enum procstate { UNUSED, EMBRYO, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 #define SCHED_FCFS 1
 #define SCHED_CFS 2
 
+extern int current_scheduler;
+
 // Per-process state
 struct proc {
   uint sz;                     // Size of process memory (bytes)

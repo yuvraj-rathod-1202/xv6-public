@@ -12,11 +12,22 @@ main(int argc, char *argv[])
     int scheduler;
 
     if(argc != 2) {
-        printf(2, "Usage: schedctl rr|fcfs|cfs\n");
+        printf(2, "Usage: schedctl get|rr|fcfs|cfs\n");
         exit();
     }
 
-    if(strcmp(argv[1], "rr") == 0) {
+    if(strcmp(argv[1], "get") == 0) {
+        scheduler = getscheduler();
+        if(scheduler == SCHED_RR)
+            printf(1, "rr\n");
+        else if(scheduler == SCHED_FCFS)
+            printf(1, "fcfs\n");
+        else if(scheduler == SCHED_CFS)
+            printf(1, "cfs\n");
+        else
+            printf(1, "unknown (%d)\n", scheduler);
+        exit();
+    } else if(strcmp(argv[1], "rr") == 0) {
         scheduler = SCHED_RR;
     } else if (strcmp(argv[1], "fcfs") == 0) {
         scheduler = SCHED_FCFS;

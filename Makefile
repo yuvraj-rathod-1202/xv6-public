@@ -177,6 +177,7 @@ UPROGS=\
 	_mkdir\
 	_rm\
 	_sh\
+	_schedctl\
 	_stressfs\
 	_usertests\
 	_wc\
