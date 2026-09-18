@@ -1,0 +1,38 @@
+#include "types.h"
+#include "stat.h"
+#include "user.h"
+
+#define SCHED_RR 0
+#define SCHED_FCFS 1
+#define SCHED_CFS 2
+
+int
+main(int argc, char *argv[])
+{
+    int scheduler;
+
+    if(argc != 2) {
+        printf(2, "Usage: schedctl rr|fcfs|cfs\n");
+        exit();
+    }
+
+    if(strcmp(argv[1], "rr") == 0) {
+        scheduler = SCHED_RR;
+    } else if (strcmp(argv[1], "fcfs") == 0) {
+        scheduler = SCHED_FCFS;
+    } else if (strcmp(argv[1], "cfs") == 0) {
+        scheduler = SCHED_CFS;
+    } else {
+        printf(2, "Invalid scheduler: %s\n", argv[1]);
+        exit();
+    }
+
+    if(setscheduler(scheduler) < 0) {
+        printf(2, "Failed to set scheduler\n");
+        exit();
+    }
+
+    printf(1, "Scheduler set to %s\n", argv[1]);
+
+    exit();
+}
