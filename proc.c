@@ -91,6 +91,8 @@ found:
   p->state = EMBRYO;
   p->pid = nextpid++;
 
+  p->ctime = ticks; // Set creation time of the process
+
   release(&ptable.lock);
 
   // Allocate kernel stack.
@@ -340,7 +342,19 @@ scheduler_RR(void)
 struct proc*
 scheduler_FCFS(void)
 {
-  // FCFS Scheduler
+  struct proc *p;
+  struct proc *selected_proc = 0;
+
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
+    if(p->state != RUNNABLE)
+      continue;
+
+    if(selected_proc == 0 || p->ctime < selected_proc->ctime) 
+      selected_proc = p;
+
+  }
+
+  return selected_proc;
 }
 
 struct proc*
@@ -359,8 +373,8 @@ select_process(void)
     case SCHED_FIFO:
       return scheduler_FCFS();
 
-    case SCHED_CFS:
-      return scheduler_CFS();
+    // case SCHED_CFS:
+    //   return scheduler_CFS();
 
     default:
       return scheduler_RR();
