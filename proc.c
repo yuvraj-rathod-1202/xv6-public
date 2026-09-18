@@ -325,7 +325,16 @@ wait(void)
 struct proc*
 scheduler_RR(void)
 {
-  // RR Scheduler
+  struct proc *p;
+
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
+    if(p->state != RUNNABLE)
+      continue;
+
+    return p;
+  }
+
+  return 0;
 }
 
 struct proc*
