@@ -93,6 +93,12 @@ found:
 
   p->ctime = ticks; // Set creation time of the process
 
+  p->vruntime = 0;
+  p->exec_time = 0;
+  p->cfs_start_time = ticks;
+  p->nice_value = 1024;
+  
+
   release(&ptable.lock);
 
   // Allocate kernel stack.
@@ -202,6 +208,7 @@ fork(void)
   }
   np->sz = curproc->sz;
   np->parent = curproc;
+  np->vruntime = curproc->vruntime;
   *np->tf = *curproc->tf;
 
   // Clear %eax so that fork returns 0 in the child.
@@ -360,7 +367,18 @@ scheduler_FCFS(void)
 struct proc*
 scheduler_CFS(void)
 {
-  // CFS Scheduler
+  struct proc *p;
+  struct proc *selected_proc = 0;
+
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
+    if(p->state != RUNNABLE)
+      continue;
+
+    if(selected_proc == 0 || p->vruntime < selected_proc->vruntime)
+      selected_proc = p;
+  }
+
+  return selected_proc;
 }
 
 struct proc*
@@ -373,8 +391,8 @@ select_process(void)
     case SCHED_FCFS:
       return scheduler_FCFS();
 
-    // case SCHED_CFS:
-    //   return scheduler_CFS();
+    case SCHED_CFS:
+      return scheduler_CFS();
 
     default:
       return scheduler_RR();
