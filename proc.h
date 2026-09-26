@@ -58,6 +58,10 @@ struct proc {
   char name[16];               // Process name (debugging)
 
   uint ctime;                  // Creation time
+  uint64 vruntime;             // Virtual runtime for CFS scheduling
+  uint64 exec_time;            // Total execution time for CFS scheduling
+  uint64 cfs_start_time;       // Start time for CFS scheduling
+  int nice_value;              // Nice value for CFS scheduling
 };
 
 // Process memory is laid out contiguously, low addresses first:
