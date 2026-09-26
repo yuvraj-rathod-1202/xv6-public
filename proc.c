@@ -10,6 +10,7 @@
 struct {
   struct spinlock lock;
   struct proc proc[NPROC];
+  struct proc *cfs_root;
 } ptable;
 
 static struct proc *initproc;
@@ -21,6 +22,9 @@ extern void forkret(void);
 extern void trapret(void);
 
 static void wakeup1(void *chan);
+
+#define RB_RED 0
+#define RB_BLACK 1
 
 static uint64
 cfs_time(void)
@@ -43,6 +47,281 @@ cfs_weight(int nice_value)
   };
 
   return weights[nice_value - NICE_MIN];
+}
+
+static int
+rb_color(struct proc *p)
+{
+  return p ? p->rb_color : RB_BLACK;
+}
+
+static int
+rb_less(struct proc *a, struct proc *b)
+{
+  if(a->vruntime != b->vruntime)
+    return a->vruntime < b->vruntime;
+  return a->pid < b->pid;
+}
+
+static void
+rb_rotate_left(struct proc *x)
+{
+  struct proc *y = x->rb_right;
+
+  x->rb_right = y->rb_left;
+  if(y->rb_left)
+    y->rb_left->rb_parent = x;
+  y->rb_parent = x->rb_parent;
+  if(x->rb_parent == 0)
+    ptable.cfs_root = y;
+  else if(x == x->rb_parent->rb_left)
+    x->rb_parent->rb_left = y;
+  else
+    x->rb_parent->rb_right = y;
+  y->rb_left = x;
+  x->rb_parent = y;
+}
+
+static void
+rb_rotate_right(struct proc *x)
+{
+  struct proc *y = x->rb_left;
+
+  x->rb_left = y->rb_right;
+  if(y->rb_right)
+    y->rb_right->rb_parent = x;
+  y->rb_parent = x->rb_parent;
+  if(x->rb_parent == 0)
+    ptable.cfs_root = y;
+  else if(x == x->rb_parent->rb_right)
+    x->rb_parent->rb_right = y;
+  else
+    x->rb_parent->rb_left = y;
+  y->rb_right = x;
+  x->rb_parent = y;
+}
+
+static void
+rb_insert_fixup(struct proc *z)
+{
+  struct proc *y;
+
+  while(z->rb_parent && z->rb_parent->rb_color == RB_RED){
+    if(z->rb_parent == z->rb_parent->rb_parent->rb_left){
+      y = z->rb_parent->rb_parent->rb_right;
+      if(rb_color(y) == RB_RED){
+        z->rb_parent->rb_color = RB_BLACK;
+        y->rb_color = RB_BLACK;
+        z->rb_parent->rb_parent->rb_color = RB_RED;
+        z = z->rb_parent->rb_parent;
+      } else {
+        if(z == z->rb_parent->rb_right){
+          z = z->rb_parent;
+          rb_rotate_left(z);
+        }
+        z->rb_parent->rb_color = RB_BLACK;
+        z->rb_parent->rb_parent->rb_color = RB_RED;
+        rb_rotate_right(z->rb_parent->rb_parent);
+      }
+    } else {
+      y = z->rb_parent->rb_parent->rb_left;
+      if(rb_color(y) == RB_RED){
+        z->rb_parent->rb_color = RB_BLACK;
+        y->rb_color = RB_BLACK;
+        z->rb_parent->rb_parent->rb_color = RB_RED;
+        z = z->rb_parent->rb_parent;
+      } else {
+        if(z == z->rb_parent->rb_left){
+          z = z->rb_parent;
+          rb_rotate_right(z);
+        }
+        z->rb_parent->rb_color = RB_BLACK;
+        z->rb_parent->rb_parent->rb_color = RB_RED;
+        rb_rotate_left(z->rb_parent->rb_parent);
+      }
+    }
+  }
+  ptable.cfs_root->rb_color = RB_BLACK;
+}
+
+static void
+rb_insert(struct proc *z)
+{
+  struct proc *x;
+  struct proc *parent = 0;
+
+  if(z->rb_in_tree)
+    panic("rb insert");
+  x = ptable.cfs_root;
+  while(x){
+    parent = x;
+    if(rb_less(z, x))
+      x = x->rb_left;
+    else
+      x = x->rb_right;
+  }
+  z->rb_parent = parent;
+  if(parent == 0)
+    ptable.cfs_root = z;
+  else if(rb_less(z, parent))
+    parent->rb_left = z;
+  else
+    parent->rb_right = z;
+  z->rb_left = 0;
+  z->rb_right = 0;
+  z->rb_color = RB_RED;
+  z->rb_in_tree = 1;
+  rb_insert_fixup(z);
+}
+
+static struct proc*
+rb_min(struct proc *root)
+{
+  if(root == 0)
+    return 0;
+  while(root->rb_left)
+    root = root->rb_left;
+  return root;
+}
+
+static void
+rb_transplant(struct proc *old, struct proc *new)
+{
+  if(old->rb_parent == 0)
+    ptable.cfs_root = new;
+  else if(old == old->rb_parent->rb_left)
+    old->rb_parent->rb_left = new;
+  else
+    old->rb_parent->rb_right = new;
+  if(new)
+    new->rb_parent = old->rb_parent;
+}
+
+static void
+rb_delete_fixup(struct proc *x, struct proc *parent)
+{
+  struct proc *w;
+
+  while(x != ptable.cfs_root && rb_color(x) == RB_BLACK){
+    if(x == (parent ? parent->rb_left : 0)){
+      w = parent ? parent->rb_right : 0;
+      if(rb_color(w) == RB_RED){
+        w->rb_color = RB_BLACK;
+        parent->rb_color = RB_RED;
+        rb_rotate_left(parent);
+        w = parent->rb_right;
+      }
+      if(rb_color(w ? w->rb_left : 0) == RB_BLACK &&
+         rb_color(w ? w->rb_right : 0) == RB_BLACK){
+        if(w)
+          w->rb_color = RB_RED;
+        x = parent;
+        parent = x ? x->rb_parent : 0;
+      } else {
+        if(rb_color(w ? w->rb_right : 0) == RB_BLACK){
+          if(w && w->rb_left)
+            w->rb_left->rb_color = RB_BLACK;
+          if(w)
+            w->rb_color = RB_RED;
+          if(w)
+            rb_rotate_right(w);
+          w = parent ? parent->rb_right : 0;
+        }
+        if(w)
+          w->rb_color = parent ? parent->rb_color : RB_BLACK;
+        if(parent)
+          parent->rb_color = RB_BLACK;
+        if(w && w->rb_right)
+          w->rb_right->rb_color = RB_BLACK;
+        if(parent)
+          rb_rotate_left(parent);
+        x = ptable.cfs_root;
+        parent = 0;
+      }
+    } else {
+      w = parent ? parent->rb_left : 0;
+      if(rb_color(w) == RB_RED){
+        w->rb_color = RB_BLACK;
+        parent->rb_color = RB_RED;
+        rb_rotate_right(parent);
+        w = parent->rb_left;
+      }
+      if(rb_color(w ? w->rb_right : 0) == RB_BLACK &&
+         rb_color(w ? w->rb_left : 0) == RB_BLACK){
+        if(w)
+          w->rb_color = RB_RED;
+        x = parent;
+        parent = x ? x->rb_parent : 0;
+      } else {
+        if(rb_color(w ? w->rb_left : 0) == RB_BLACK){
+          if(w && w->rb_right)
+            w->rb_right->rb_color = RB_BLACK;
+          if(w)
+            w->rb_color = RB_RED;
+          if(w)
+            rb_rotate_left(w);
+          w = parent ? parent->rb_left : 0;
+        }
+        if(w)
+          w->rb_color = parent ? parent->rb_color : RB_BLACK;
+        if(parent)
+          parent->rb_color = RB_BLACK;
+        if(w && w->rb_left)
+          w->rb_left->rb_color = RB_BLACK;
+        if(parent)
+          rb_rotate_right(parent);
+        x = ptable.cfs_root;
+        parent = 0;
+      }
+    }
+  }
+  if(x)
+    x->rb_color = RB_BLACK;
+}
+
+static void
+rb_delete(struct proc *z)
+{
+  struct proc *y = z;
+  struct proc *x;
+  struct proc *parent;
+  int color = y->rb_color;
+
+  if(!z->rb_in_tree)
+    panic("rb delete");
+  if(z->rb_left == 0){
+    x = z->rb_right;
+    parent = z->rb_parent;
+    rb_transplant(z, z->rb_right);
+  } else if(z->rb_right == 0){
+    x = z->rb_left;
+    parent = z->rb_parent;
+    rb_transplant(z, z->rb_left);
+  } else {
+    y = rb_min(z->rb_right);
+    color = y->rb_color;
+    x = y->rb_right;
+    if(y->rb_parent == z){
+      parent = y;
+      if(x)
+        x->rb_parent = y;
+    } else {
+      parent = y->rb_parent;
+      rb_transplant(y, y->rb_right);
+      y->rb_right = z->rb_right;
+      y->rb_right->rb_parent = y;
+    }
+    rb_transplant(z, y);
+    y->rb_left = z->rb_left;
+    y->rb_left->rb_parent = y;
+    y->rb_color = z->rb_color;
+  }
+  z->rb_left = 0;
+  z->rb_right = 0;
+  z->rb_parent = 0;
+  z->rb_in_tree = 0;
+  if(color == RB_BLACK)
+    rb_delete_fixup(x, parent);
 }
 
 void
@@ -183,6 +462,7 @@ userinit(void)
   acquire(&ptable.lock);
 
   p->state = RUNNABLE;
+  rb_insert(p);
 
   release(&ptable.lock);
 }
@@ -251,6 +531,7 @@ fork(void)
   acquire(&ptable.lock);
 
   np->state = RUNNABLE;
+  rb_insert(np);
 
   release(&ptable.lock);
 
@@ -392,18 +673,7 @@ scheduler_FCFS(void)
 struct proc*
 scheduler_CFS(void)
 {
-  struct proc *p;
-  struct proc *selected_proc = 0;
-
-  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
-    if(p->state != RUNNABLE)
-      continue;
-
-    if(selected_proc == 0 || p->vruntime < selected_proc->vruntime)
-      selected_proc = p;
-  }
-
-  return selected_proc;
+  return rb_min(ptable.cfs_root);
 }
 
 struct proc*
@@ -440,6 +710,7 @@ scheduler(void)
     struct proc *p = select_process();
 
     if(p != 0){
+      rb_delete(p);
       c->proc = p;
       switchuvm(p);
 
@@ -485,6 +756,8 @@ sched(void)
     p->vruntime += elapsed * NICE_0_LOAD / cfs_weight(p->nice_value);
     p->cfs_accounting = 0;
   }
+  if(p->state == RUNNABLE)
+    rb_insert(p);
   intena = mycpu()->intena;
   swtch(&p->context, mycpu()->scheduler);
   mycpu()->intena = intena;
@@ -587,6 +860,7 @@ wakeup1(void *chan)
          p->vruntime < min_vruntime)
         p->vruntime = min_vruntime;
       p->state = RUNNABLE;
+      rb_insert(p);
     }
 }
 
@@ -613,7 +887,10 @@ kill(int pid)
       p->killed = 1;
       // Wake process from sleep if necessary.
       if(p->state == SLEEPING)
+      {
         p->state = RUNNABLE;
+        rb_insert(p);
+      }
       release(&ptable.lock);
       return 0;
     }

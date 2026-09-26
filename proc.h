@@ -67,6 +67,11 @@ struct proc {
   uint64 cfs_start_time;       // Start time for CFS scheduling
   int cfs_accounting;          // Whether the current run interval is CFS-accounted
   int nice_value;              // User nice value, from NICE_MIN through NICE_MAX
+  struct proc *rb_left;
+  struct proc *rb_right;
+  struct proc *rb_parent;
+  int rb_color;
+  int rb_in_tree;
 };
 
 // Process memory is laid out contiguously, low addresses first:
