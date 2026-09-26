@@ -533,10 +533,27 @@ static void
 wakeup1(void *chan)
 {
   struct proc *p;
+  uint64 min_vruntime = 0;
+  int found = 0;
+
+  if(current_scheduler == SCHED_CFS){
+    for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+      if(p->state != RUNNABLE && p->state != RUNNING)
+        continue;
+      if(!found || p->vruntime < min_vruntime){
+        min_vruntime = p->vruntime;
+        found = 1;
+      }
+    }
+  }
 
   for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
-    if(p->state == SLEEPING && p->chan == chan)
+    if(p->state == SLEEPING && p->chan == chan){
+      if(current_scheduler == SCHED_CFS && found &&
+         p->vruntime < min_vruntime)
+        p->vruntime = min_vruntime;
       p->state = RUNNABLE;
+    }
 }
 
 // Wake up all processes sleeping on chan.
