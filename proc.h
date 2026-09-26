@@ -61,6 +61,7 @@ struct proc {
   uint64 vruntime;             // Virtual runtime for CFS scheduling
   uint64 exec_time;            // Total execution time for CFS scheduling
   uint64 cfs_start_time;       // Start time for CFS scheduling
+  int cfs_accounting;          // Whether the current run interval is CFS-accounted
   int nice_value;              // Nice value for CFS scheduling
 };
 

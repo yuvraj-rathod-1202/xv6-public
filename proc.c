@@ -22,6 +22,12 @@ extern void trapret(void);
 
 static void wakeup1(void *chan);
 
+static uint64
+cfs_time(void)
+{
+  return ticks;
+}
+
 void
 pinit(void)
 {
@@ -96,6 +102,7 @@ found:
   p->vruntime = 0;
   p->exec_time = 0;
   p->cfs_start_time = ticks;
+  p->cfs_accounting = 0;
   p->nice_value = 1024;
   
 
@@ -419,6 +426,9 @@ scheduler(void)
       switchuvm(p);
 
       p->state = RUNNING;
+      p->cfs_accounting = current_scheduler == SCHED_CFS;
+      if(p->cfs_accounting)
+        p->cfs_start_time = cfs_time();
       
       swtch(&(c->scheduler), p->context);
 
@@ -451,6 +461,12 @@ sched(void)
     panic("sched running");
   if(readeflags()&FL_IF)
     panic("sched interruptible");
+  if(p->cfs_accounting){
+    uint64 elapsed = cfs_time() - p->cfs_start_time;
+    p->exec_time += elapsed;
+    p->vruntime += elapsed;
+    p->cfs_accounting = 0;
+  }
   intena = mycpu()->intena;
   swtch(&p->context, mycpu()->scheduler);
   mycpu()->intena = intena;
