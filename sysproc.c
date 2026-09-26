@@ -113,3 +113,23 @@ sys_getscheduler(void)
 {
   return current_scheduler;
 }
+
+int
+sys_setnice(void)
+{
+  int nice_value;
+
+  if(argint(0, &nice_value) < 0)
+    return -1;
+  if(nice_value < NICE_MIN || nice_value > NICE_MAX)
+    return -1;
+
+  myproc()->nice_value = nice_value;
+  return 0;
+}
+
+int
+sys_getnice(void)
+{
+  return myproc()->nice_value;
+}

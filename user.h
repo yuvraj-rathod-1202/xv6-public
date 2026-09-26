@@ -25,6 +25,8 @@ int sleep(int);
 int uptime(void);
 int setscheduler(int);
 int getscheduler(void);
+int setnice(int);
+int getnice(void);
 
 // ulib.c
 int stat(const char*, struct stat*);

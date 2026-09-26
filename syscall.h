@@ -22,3 +22,5 @@
 #define SYS_close  21
 #define SYS_setscheduler 22
 #define SYS_getscheduler 23
+#define SYS_setnice 24
+#define SYS_getnice 25

@@ -28,6 +28,23 @@ cfs_time(void)
   return ticks;
 }
 
+static uint64
+cfs_weight(int nice_value)
+{
+  static const uint weights[NICE_MAX - NICE_MIN + 1] = {
+    88761, 71755, 56483, 46273, 36291,
+    29154, 23254, 18705, 14949, 11916,
+     9548,  7620,  6100,  4904,  3906,
+     3121,  2501,  1991,  1586,  1277,
+     1024,   820,   655,   526,   423,
+      335,   272,   215,   172,   137,
+      110,    87,    70,    56,    45,
+       36,    29,    23,    18,    15
+  };
+
+  return weights[nice_value - NICE_MIN];
+}
+
 void
 pinit(void)
 {
@@ -103,7 +120,7 @@ found:
   p->exec_time = 0;
   p->cfs_start_time = ticks;
   p->cfs_accounting = 0;
-  p->nice_value = 1024;
+  p->nice_value = NICE_DEFAULT;
   
 
   release(&ptable.lock);
@@ -216,6 +233,7 @@ fork(void)
   np->sz = curproc->sz;
   np->parent = curproc;
   np->vruntime = curproc->vruntime;
+  np->nice_value = curproc->nice_value;
   *np->tf = *curproc->tf;
 
   // Clear %eax so that fork returns 0 in the child.
@@ -464,7 +482,7 @@ sched(void)
   if(p->cfs_accounting){
     uint64 elapsed = cfs_time() - p->cfs_start_time;
     p->exec_time += elapsed;
-    p->vruntime += elapsed;
+    p->vruntime += elapsed * NICE_0_LOAD / cfs_weight(p->nice_value);
     p->cfs_accounting = 0;
   }
   intena = mycpu()->intena;

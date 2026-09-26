@@ -38,6 +38,10 @@ enum procstate { UNUSED, EMBRYO, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 #define SCHED_RR 0
 #define SCHED_FCFS 1
 #define SCHED_CFS 2
+#define NICE_MIN -20
+#define NICE_MAX 19
+#define NICE_DEFAULT 0
+#define NICE_0_LOAD 1024
 
 extern int current_scheduler;
 
@@ -62,7 +66,7 @@ struct proc {
   uint64 exec_time;            // Total execution time for CFS scheduling
   uint64 cfs_start_time;       // Start time for CFS scheduling
   int cfs_accounting;          // Whether the current run interval is CFS-accounted
-  int nice_value;              // Nice value for CFS scheduling
+  int nice_value;              // User nice value, from NICE_MIN through NICE_MAX
 };
 
 // Process memory is laid out contiguously, low addresses first:
