@@ -15,6 +15,10 @@ OBJS = \
 	picirq.o\
 	pipe.o\
 	proc.o\
+	rbtree.o\
+	sched.o\
+	sched_cfs.o\
+	sched_rr.o\
 	sleeplock.o\
 	spinlock.o\
 	string.o\
@@ -78,6 +82,11 @@ OBJCOPY = $(TOOLPREFIX)objcopy
 OBJDUMP = $(TOOLPREFIX)objdump
 CFLAGS = -fno-pic -static -fno-builtin -fno-strict-aliasing -O2 -Wall -MD -ggdb -m32 -Werror -Wno-error=array-bounds -fno-omit-frame-pointer
 CFLAGS += $(shell $(CC) -fno-stack-protector -E -x c /dev/null >/dev/null 2>&1 && echo -fno-stack-protector)
+# make SCHED_DEBUG=1: kernel checks scheduler invariants on every run-queue
+# operation and cross-checks every CFS pick (slow; for testing).
+ifdef SCHED_DEBUG
+CFLAGS += -DSCHED_DEBUG
+endif
 ASFLAGS = -m32 -gdwarf-2 -Wa,-divide
 # FreeBSD ld wants ``elf_i386_fbsd''
 LDFLAGS += -m $(shell $(LD) -V | grep elf_i386 2>/dev/null | head -n 1)
@@ -182,7 +191,10 @@ UPROGS=\
 	_sh\
 	_schedbench\
 	_schedctl\
+	_schedoverhead\
+	_schedstress\
 	_schedtest\
+	_schedtrace\
 	_stressfs\
 	_usertests\
 	_wc\
@@ -197,7 +209,7 @@ clean:
 	rm -f *.tex *.dvi *.idx *.aux *.log *.ind *.ilg \
 	*.o *.d *.asm *.sym vectors.S bootblock entryother \
 	initcode initcode.out kernel xv6.img fs.img kernelmemfs \
-	xv6memfs.img mkfs .gdbinit \
+	xv6memfs.img mkfs .gdbinit tests/rbtree_test \
 	$(UPROGS)
 
 # make a printout
@@ -225,7 +237,9 @@ QEMUGDB = $(shell if $(QEMU) -help | grep -q '^-gdb'; \
 ifndef CPUS
 CPUS := 2
 endif
-QEMUOPTS = -drive file=fs.img,index=1,media=disk,format=raw -drive file=xv6.img,index=0,media=disk,format=raw -smp $(CPUS) -m 512 $(QEMUEXTRA)
+# sockets=$(CPUS): QEMU >= 8 puts all -smp CPUs in one socket by default, and
+# its MP table then lists only one of them, so xv6 would boot just cpu0.
+QEMUOPTS = -drive file=fs.img,index=1,media=disk,format=raw -drive file=xv6.img,index=0,media=disk,format=raw -smp $(CPUS),sockets=$(CPUS) -m 512 $(QEMUEXTRA)
 
 qemu: fs.img xv6.img
 	$(QEMU) -serial mon:stdio $(QEMUOPTS)
@@ -235,6 +249,35 @@ qemu-memfs: xv6memfs.img
 
 qemu-nox: fs.img xv6.img
 	$(QEMU) -nographic $(QEMUOPTS)
+
+# Deterministic timing for benchmarks: guest time follows instructions
+# executed, so results do not depend on host load.
+qemu-bench: fs.img xv6.img
+	$(QEMU) -nographic $(QEMUOPTS) -icount shift=3,sleep=off
+
+# ---- Scheduler project tests (see SCHEDULERS.md) ----
+# Host-side unit test of the red-black tree used by CFS.
+rbtree-test: tests/rbtree_test
+	./tests/rbtree_test
+
+tests/rbtree_test: tests/rbtree_test.c rbtree.c rbtree.h
+	gcc -O2 -Wall -Werror -o $@ tests/rbtree_test.c rbtree.c
+
+# Tests the test: every deliberately broken copy of rbtree.c must fail it.
+rbtree-mutation:
+	sh tests/rbtree_mutation.sh
+
+# Quick suite (~10 min): unit tests, schedtest and schedstress on 1/2/4
+# CPUs under a SCHED_DEBUG kernel.
+test:
+	python3 tools/xv6test.py --quick
+
+# Full suite: adds usertests under each preemptive scheduler and the
+# benchmarks, trace and Gantt charts (written to results/).
+test-full:
+	python3 tools/xv6test.py --full
+
+.PHONY: rbtree-test rbtree-mutation test test-full qemu-bench
 
 .gdbinit: .gdbinit.tmpl
 	sed "s/localhost:1234/localhost:$(GDBPORT)/" < $^ > $@

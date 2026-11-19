@@ -8,16 +8,25 @@
 //   3. fifo    - under FIFO, processes are first dispatched in the order they
 //                became runnable, and are never preempted once running.
 //   4. nice    - renice/getpinfo/setnice validation and nice inheritance.
+//   5. slices  - CFS time slices follow sched_latency and min_granularity:
+//                a longer latency means proportionally fewer preemptions,
+//                and min_granularity puts a floor under the slice.
+//   6. trace   - the scheduling trace is well formed: on every CPU, runs and
+//                stops alternate, times never go backwards, and exits and
+//                sleeps are recorded.
+//   7. scan    - every CFS pick equals what a linear scan of the process
+//                table would choose (the tree never picks the wrong process).
 //
 // Test 2 is only discriminating with one CPU: make qemu-nox CPUS=1
 #include "types.h"
 #include "stat.h"
 #include "user.h"
 #include "sched.h"
+#include "param.h"
 
 static volatile uint sink;
 static uint loops_per_tick;
-static struct pinfo procs[64];
+static struct pinfo procs[NPROC];
 static int failures;
 
 static void
@@ -68,7 +77,7 @@ check(int ok, char *what)
 static struct pinfo*
 find(int pid)
 {
-  int i, n = getpinfo(procs, 64);
+  int i, n = getpinfo(procs, NPROC);
 
   for(i = 0; i < n; i++)
     if(procs[i].pid == pid)
@@ -232,6 +241,193 @@ test_nice(void)
   setnice(0);
 }
 
+// The CFS slice (ticks) for n equal-weight runnable processes, by the same
+// formula as sched_cfs.c.
+static uint
+expected_slice(uint latency, uint gran, uint n)
+{
+  uint period = latency, slice;
+
+  if(n * gran > period)
+    period = n * gran;
+  slice = (period + n / 2) / n;     // period * w / (n * w), rounded
+  return slice < gran ? gran : slice;
+}
+
+// Run nproc CPU-bound processes under CFS with the given tunables for
+// `window` ticks; return the number of timer preemptions. The parent blocks
+// in wait() (not sleep(), which xv6 wakes on every tick and which would
+// make the parent itself a runnable process every tick).
+static uint
+preemptions_with(uint latency, uint gran, int nproc, int window)
+{
+  struct schedstat st;
+  int i;
+  uint stop;
+
+  schedtune(latency, gran);
+  schedstat(SS_RESET, &st);
+  stop = uptime() + window;
+  for(i = 0; i < nproc; i++){
+    if(fork() == 0){
+      while(uptime() < stop)
+        burn(1000);
+      exit();
+    }
+  }
+  for(i = 0; i < nproc; i++)
+    wait();
+  schedstat(SS_GET, &st);
+  return st.preemptions;
+}
+
+// Measured preemptions must be within 35% (plus 2) of what the slice
+// formula predicts: about window * ncpu / slice.
+static void
+check_slices(uint latency, uint gran, int n, int ncpu, int window)
+{
+  uint slice = expected_slice(latency, gran, n);
+  uint want = window * ncpu / slice;
+  uint got = preemptions_with(latency, gran, n, window);
+  char msg[96];
+  int ok = got * 100 <= want * 135 + 200 && got * 100 + 200 >= want * 65;
+
+  printf(1, "  latency %d, min_gran %d, %d procs: slice %d ticks -> expect ~%d"
+         " preemptions, got %d\n", latency, gran, n, slice, want, got);
+  strcpy(msg, "preemption count matches the CFS slice formula");
+  check(ok, msg);
+}
+
+static void
+test_slices(void)
+{
+  struct schedstat st;
+  int n, window = 60;
+
+  printf(1, "test 5: CFS time slices (sched_latency, min_granularity)\n");
+  schedstat(SS_GET, &st);
+  n = 2 * st.ncpu;          // two runnable processes per CPU
+  if(n > 16)
+    n = 16;
+  setscheduler(SCHED_CFS);
+
+  check_slices(24, 1, n, st.ncpu, window);   // long latency: long slices
+  check_slices(1, 1, n, st.ncpu, window);    // 1-tick slices
+  check_slices(4, 1, n, st.ncpu, window);    // slice = 4/n, floor 1
+  check_slices(4, 4, n, st.ncpu, window);    // min_granularity stretches period
+
+  check(schedtune(5, 6) < 0 && schedtune(SCHED_LATENCY_MAX + 1, 1) < 0,
+        "schedtune rejects min_granularity > latency and huge latency");
+  schedtune(SCHED_LATENCY_DEFAULT, SCHED_MIN_GRAN_DEFAULT);
+  setscheduler(SCHED_RR);
+}
+
+static void
+test_trace(void)
+{
+  struct trace_event *ev;
+  int running[8], seen[8], i, n, cpu, ok = 1, exits = 0, sleeps = 0;
+  int kids[2];
+  uint last[8];
+
+  printf(1, "test 6: scheduling trace\n");
+  setscheduler(SCHED_CFS);
+  tracectl(TRACE_START);
+  for(i = 0; i < 2; i++){
+    kids[i] = fork();
+    if(kids[i] == 0){
+      burn_ticks(3);
+      sleep(2);
+      burn_ticks(2);
+      exit();
+    }
+  }
+  wait();
+  wait();
+  n = tracectl(TRACE_STOP);
+  check(tracectl(TRACE_DROPPED) == 0, "no events dropped");
+  ev = malloc(n * sizeof(*ev));
+  check(ev != 0 && traceread(ev, 0, n) == n, "read back all events");
+  if(ev == 0)
+    return;
+
+  for(i = 0; i < 8; i++){
+    running[i] = -1;
+    seen[i] = 0;
+    last[i] = 0;
+  }
+  for(i = 0; i < n && ok; i++){
+    cpu = ev[i].cpu;
+    if(ev[i].type == TR_SCHED)
+      continue;
+    if(cpu >= 8 || ev[i].t < last[cpu]){
+      printf(1, "  event %d: bad cpu or time went backwards\n", i);
+      ok = 0;
+    }
+    last[cpu] = ev[i].t;
+    if(ev[i].type == TR_RUN){
+      if(running[cpu] != -1){
+        printf(1, "  event %d: cpu %d runs pid %d while pid %d still running\n",
+               i, cpu, ev[i].pid, running[cpu]);
+        ok = 0;
+      }
+      running[cpu] = ev[i].pid;
+    } else if(ev[i].type == TR_STOP){
+      // The first event on a CPU may stop a process that was already
+      // running when the trace started.
+      if(running[cpu] != ev[i].pid && seen[cpu]){
+        printf(1, "  event %d: cpu %d stops pid %d but pid %d was running\n",
+               i, cpu, ev[i].pid, running[cpu]);
+        ok = 0;
+      }
+      running[cpu] = -1;
+      if(ev[i].pid == kids[0] || ev[i].pid == kids[1]){
+        exits += ev[i].arg == TRS_EXIT;
+        sleeps += ev[i].arg == TRS_SLEEP;
+      }
+    }
+    seen[cpu] = 1;
+  }
+  printf(1, "  %d events; children: %d exits, %d sleeps recorded\n",
+         n, exits, sleeps);
+  check(ok, "runs and stops alternate on every CPU; time is monotonic");
+  check(exits == 2 && sleeps >= 2, "exits and sleeps are recorded");
+  free(ev);
+  setscheduler(SCHED_RR);
+}
+
+static void
+test_scan(void)
+{
+  struct schedstat st;
+  int i, pids[6];
+
+  printf(1, "test 7: CFS tree pick == linear-scan pick\n");
+  setscheduler(SCHED_CFS);
+  schedstat(SS_SCAN_ON, &st);
+  schedstat(SS_RESET, &st);
+  for(i = 0; i < 6; i++){
+    pids[i] = fork();
+    if(pids[i] == 0){
+      setnice(i * 4 - 10);
+      burn_ticks(4);
+      sleep(1);
+      burn_ticks(4);
+      exit();
+    }
+  }
+  renice(pids[0], 15);
+  for(i = 0; i < 6; i++)
+    wait();
+  schedstat(SS_GET, &st);
+  schedstat(SS_SCAN_OFF, &st);
+  printf(1, "  %d picks cross-checked, %d mismatches\n", st.scans,
+         st.scan_mismatches);
+  check(st.scans > 10 && st.scan_mismatches == 0,
+        "the tree always picks the minimum-vruntime process");
+  setscheduler(SCHED_RR);
+}
+
 int
 main(void)
 {
@@ -242,6 +438,9 @@ main(void)
   test_cfsfair();
   test_fifo();
   test_nice();
+  test_slices();
+  test_trace();
+  test_scan();
   setscheduler(orig);
 
   if(failures == 0)

@@ -27,3 +27,7 @@
 #define SYS_getpinfo 26
 #define SYS_waitx 27
 #define SYS_renice 28
+#define SYS_schedtune 29
+#define SYS_schedstat 30
+#define SYS_tracectl 31
+#define SYS_traceread 32

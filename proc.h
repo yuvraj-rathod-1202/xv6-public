@@ -35,10 +35,9 @@ struct context {
 enum procstate { UNUSED, EMBRYO, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 
 #include "sched.h"   // SCHED_*, NICE_*, struct pinfo, struct waitinfo
+#include "rbtree.h"  // struct rb_node
 
 #define NICE_0_LOAD 1024
-
-extern int current_scheduler;
 
 // Per-process state
 struct proc {
@@ -56,23 +55,27 @@ struct proc {
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
 
-  uint ctime;                  // Creation time (ticks)
-  uint etime;                  // Exit time (ticks)
+  // ---- Scheduling (see sched.c, sched_rr.c, sched_cfs.c) ----
+  int nice_value;              // NICE_MIN..NICE_MAX; only CFS uses it
+  int on_rq;                   // In the active class's run queue (iff RUNNABLE)
+  // Statistics, in ticks
+  uint ctime;                  // Creation time
+  uint etime;                  // Exit time
   uint first_run;              // Tick of first dispatch (valid if has_run)
   int has_run;                 // Has been dispatched at least once
-  uint wtime;                  // Ticks spent RUNNABLE
-  uint stime;                  // Ticks spent SLEEPING
-  uint64 fifo_seq;             // Order in which it last became RUNNABLE (FIFO)
-  uint64 vruntime;             // Virtual runtime for CFS (weighted CPU cycles)
-  uint64 exec_time;            // Total CPU cycles spent RUNNING (any scheduler)
+  uint wtime;                  // Ticks spent RUNNABLE (sampled)
+  uint stime;                  // Ticks spent SLEEPING (sampled)
+  uint64 exec_time;            // Total CPU cycles spent RUNNING
   uint64 run_start;            // TSC value when the current run started
-  int cfs_accounting;          // Whether the current run interval is CFS-accounted
-  int nice_value;              // User nice value, from NICE_MIN through NICE_MAX
-  struct proc *rb_left;
-  struct proc *rb_right;
-  struct proc *rb_parent;
-  int rb_color;
-  int rb_in_tree;
+  // RR / FIFO run queue links
+  struct proc *rq_next;
+  struct proc *rq_prev;
+  // CFS
+  struct rb_node rb;           // Node in the CFS red-black tree
+  uint64 vruntime;             // Virtual runtime (weighted CPU cycles)
+  int cfs_accounting;          // Current run was dispatched by CFS (charge it)
+  uint cfs_load;               // Weight counted in the CFS load sums
+  uint slice_ticks;            // Ticks used in the current CFS run
 };
 
 // Process memory is laid out contiguously, low addresses first:

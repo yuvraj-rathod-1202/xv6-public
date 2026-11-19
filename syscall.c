@@ -104,6 +104,10 @@ extern int sys_sbrk(void);
 extern int sys_setscheduler(void);
 extern int sys_setnice(void);
 extern int sys_renice(void);
+extern int sys_schedstat(void);
+extern int sys_schedtune(void);
+extern int sys_tracectl(void);
+extern int sys_traceread(void);
 extern int sys_waitx(void);
 extern int sys_sleep(void);
 extern int sys_unlink(void);
@@ -140,6 +144,10 @@ static int (*syscalls[])(void) = {
 [SYS_getpinfo] sys_getpinfo,
 [SYS_waitx]   sys_waitx,
 [SYS_renice]  sys_renice,
+[SYS_schedtune] sys_schedtune,
+[SYS_schedstat] sys_schedstat,
+[SYS_tracectl] sys_tracectl,
+[SYS_traceread] sys_traceread,
 };
 
 void

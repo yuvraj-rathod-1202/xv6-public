@@ -164,3 +164,52 @@ sys_renice(void)
     return -1;
   return renice(pid, nice);
 }
+
+// schedtune(int latency, int min_granularity): CFS tunables in ticks;
+// 0 leaves a value unchanged.
+int
+sys_schedtune(void)
+{
+  int latency, gran;
+
+  if(argint(0, &latency) < 0 || argint(1, &gran) < 0)
+    return -1;
+  return schedtune(latency, gran);
+}
+
+// schedstat(int cmd, struct schedstat *st): read/reset scheduler counters.
+int
+sys_schedstat(void)
+{
+  int cmd;
+  struct schedstat *st;
+
+  if(argint(0, &cmd) < 0 || argptr(1, (char**)&st, sizeof(*st)) < 0)
+    return -1;
+  return schedstat(cmd, st);
+}
+
+// tracectl(int cmd): start/stop the scheduling trace.
+int
+sys_tracectl(void)
+{
+  int cmd;
+
+  if(argint(0, &cmd) < 0)
+    return -1;
+  return tracectl(cmd);
+}
+
+// traceread(struct trace_event *buf, int start, int n): copy trace events.
+int
+sys_traceread(void)
+{
+  struct trace_event *buf;
+  int start, n;
+
+  if(argint(1, &start) < 0 || argint(2, &n) < 0 || n < 0 || n > TRACE_MAX)
+    return -1;
+  if(argptr(0, (char**)&buf, n * sizeof(struct trace_event)) < 0)
+    return -1;
+  return traceread(buf, start, n);
+}

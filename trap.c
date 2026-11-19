@@ -103,14 +103,13 @@ trap(struct trapframe *tf)
   if(myproc() && myproc()->killed && (tf->cs&3) == DPL_USER)
     exit();
 
-  // Force process to give up CPU on clock tick.
+  // On a clock tick, let the active scheduling class decide whether the
+  // running process has used up its time slice (RR: always, every tick;
+  // CFS: after its share of sched_latency; FIFO: never).
   // If interrupts were on while locks held, would need to check nlock.
-  // FIFO is non-preemptive: the running process keeps the CPU until it
-  // blocks or exits, so no yield on timer ticks while FIFO is active.
   if(myproc() && myproc()->state == RUNNING &&
-     tf->trapno == T_IRQ0+IRQ_TIMER && current_scheduler != SCHED_FCFS) {
-    yield();
-  }
+     tf->trapno == T_IRQ0+IRQ_TIMER)
+    preempt_tick();
 
   // Check if the process has been killed since we yielded
   if(myproc() && myproc()->killed && (tf->cs&3) == DPL_USER)

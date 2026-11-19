@@ -1,6 +1,8 @@
 // schedbench: compare RR, FIFO and CFS on the same workloads.
 //
-//   schedbench [cpu|io|mix|nice|all]      (default: all)
+//   schedbench [cpu|io|mix|nice|all] [rr|fifo|cfs]
+//     (default: all workloads, each under all three schedulers; naming a
+//      scheduler runs only that one, e.g. schedtrace schedbench cpu fifo)
 //
 // cpu, io, mix: run the workload once under each scheduler and report, per
 //   process and on average (all in timer ticks):
@@ -219,19 +221,23 @@ run_workload(int sched, struct job *jobs, int n, int verbose)
 }
 
 static void
-compare(char *name, struct job *jobs, int n)
+compare(char *name, struct job *jobs, int n, int only)
 {
   struct summary s[3];
   int i;
 
   printf(1, "\n=== workload: %s (%d processes) ===\n", name, n);
   for(i = 0; i < 3; i++){
+    if(only >= 0 && sched_ids[i] != only)
+      continue;
     printf(1, "-- %s --\n", sched_names[i]);
     s[i] = run_workload(sched_ids[i], jobs, n, 1);
   }
   printf(1, "\nsummary (%s), averages in ticks:\n", name);
   printf(1, "  sched   turnaround   waiting  response  makespan\n");
   for(i = 0; i < 3; i++){
+    if(only >= 0 && sched_ids[i] != only)
+      continue;
     int pad = 6 - strlen(sched_names[i]);
     printf(1, "  %s", sched_names[i]);
     while(pad-- > 0)
@@ -307,22 +313,33 @@ main(int argc, char *argv[])
   char *what = argc > 1 ? argv[1] : "all";
   int all = strcmp(what, "all") == 0;
   int orig = getscheduler();
+  int only = -1;   // run under one scheduler only (e.g. under schedtrace)
 
-  if(!all && strcmp(what, "cpu") && strcmp(what, "io") &&
-     strcmp(what, "mix") && strcmp(what, "nice")){
-    printf(2, "usage: schedbench [cpu|io|mix|nice|all]\n");
+  if(argc > 2){
+    if(strcmp(argv[2], "rr") == 0)
+      only = SCHED_RR;
+    else if(strcmp(argv[2], "fifo") == 0 || strcmp(argv[2], "fcfs") == 0)
+      only = SCHED_FCFS;
+    else if(strcmp(argv[2], "cfs") == 0)
+      only = SCHED_CFS;
+  }
+  if((!all && strcmp(what, "cpu") && strcmp(what, "io") &&
+      strcmp(what, "mix") && strcmp(what, "nice")) ||
+     (argc > 2 && only < 0)){
+    printf(2, "usage: schedbench [cpu|io|mix|nice|all] [rr|fifo|cfs]\n");
     exit();
   }
 
   calibrate();
   printf(1, "schedbench: %d loop iterations per tick\n", loops_per_tick);
+  tracectl(TRACE_RESTART);   // under schedtrace: leave calibration out of the trace
 
   if(all || strcmp(what, "cpu") == 0)
-    compare("cpu", cpu_jobs, NJOBS(cpu_jobs));
+    compare("cpu", cpu_jobs, NJOBS(cpu_jobs), only);
   if(all || strcmp(what, "io") == 0)
-    compare("io", io_jobs, NJOBS(io_jobs));
+    compare("io", io_jobs, NJOBS(io_jobs), only);
   if(all || strcmp(what, "mix") == 0)
-    compare("mix", mix_jobs, NJOBS(mix_jobs));
+    compare("mix", mix_jobs, NJOBS(mix_jobs), only);
   if(all || strcmp(what, "nice") == 0)
     nice_test();
 

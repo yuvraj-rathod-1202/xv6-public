@@ -5,8 +5,9 @@
 #include "stat.h"
 #include "user.h"
 #include "sched.h"
+#include "param.h"
 
-#define MAXPROC 64
+#define MAXPROC NPROC
 
 static struct pinfo procs[MAXPROC];   // too big for the 4KB user stack
 

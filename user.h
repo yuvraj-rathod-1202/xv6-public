@@ -2,6 +2,8 @@ struct stat;
 struct rtcdate;
 struct pinfo;
 struct waitinfo;
+struct schedstat;
+struct trace_event;
 
 // system calls
 int fork(void);
@@ -32,6 +34,10 @@ int getnice(void);
 int getpinfo(struct pinfo*, int);
 int waitx(struct waitinfo*);
 int renice(int, int);
+int schedtune(int, int);
+int schedstat(int, struct schedstat*);
+int tracectl(int);
+int traceread(struct trace_event*, int, int);
 
 // ulib.c
 int stat(const char*, struct stat*);

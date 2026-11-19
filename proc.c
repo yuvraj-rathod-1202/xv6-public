@@ -7,17 +7,14 @@
 #include "proc.h"
 #include "spinlock.h"
 
+// Process table. ptable.lock also protects all scheduler state (sched.c and
+// the scheduler classes): run queues, statistics and the trace buffer.
 struct {
   struct spinlock lock;
   struct proc proc[NPROC];
-  struct proc *cfs_root;       // CFS run queue: red-black tree of RUNNABLE procs
-  uint64 min_vruntime;         // Monotonic floor for vruntime (CFS)
-  uint64 fifo_seq;             // Last sequence number handed out (FIFO)
 } ptable;
 
 static struct proc *initproc;
-
-int current_scheduler = SCHED_RR;
 
 int nextpid = 1;
 extern void forkret(void);
@@ -25,442 +22,19 @@ extern void trapret(void);
 
 static void wakeup1(void *chan);
 
-#define RB_RED 0
-#define RB_BLACK 1
-
-// Run time is measured in CPU cycles (TSC), not timer ticks. With ticks, a
-// process that blocks before the next tick is charged nothing, so a process
-// that always sleeps just short of a tick boundary would never be charged
-// (CFS) and would show 0 run time (statistics). A process starts and stops a
-// run on the same CPU, so per-CPU TSC offsets cancel out.
-static uint64
-run_clock(void)
+// For scheduler classes that need to visit every process (with
+// ptable.lock held).
+struct proc*
+proc_table(void)
 {
-  return rdtsc();
-}
-
-// TSC cycles per timer tick, measured on CPU 0 (see update_times). Used only
-// to report run time in ticks; scheduling decisions never depend on it.
-static uint cycles_per_tick;
-
-// 64-by-32-bit division using the x86 divl instruction (no libgcc in the
-// kernel). Divides the high word first so the divl quotient cannot overflow.
-static uint64
-div64_32(uint64 n, uint d)
-{
-  uint hi = n >> 32, lo = (uint)n;
-  uint qhi = hi / d, r = hi % d, qlo;
-
-  asm("divl %4" : "=a" (qlo), "=d" (r) : "0" (lo), "1" (r), "rm" (d));
-  return ((uint64)qhi << 32) | qlo;
-}
-
-// Convert CPU cycles to timer ticks, rounded to nearest.
-static uint
-cycles_to_ticks(uint64 cycles)
-{
-  if(cycles_per_tick == 0)
-    return 0;
-  return (uint)div64_32(cycles + cycles_per_tick / 2, cycles_per_tick);
-}
-
-// Total run time of p in cycles, including its current run if RUNNING.
-static uint64
-run_cycles(struct proc *p)
-{
-  uint64 c = p->exec_time;
-
-  if(p->state == RUNNING)
-    c += run_clock() - p->run_start;
-  return c;
-}
-
-// vruntime += cycles * NICE_0_LOAD / weight. To avoid a 64-bit division (the
-// kernel has no libgcc, so no __udivdi3), precompute the per-cycle factor in
-// 32 bits with CFS_SHIFT bits of fraction, then multiply and shift:
-//   vruntime += (cycles * ((NICE_0_LOAD << CFS_SHIFT) / weight)) >> CFS_SHIFT
-// At nice 0 one cycle adds exactly 1. The factor is at most 2^22 (nice 19), so
-// the product stays below 2^64 for any single run shorter than ~2^42 cycles.
-#define CFS_SHIFT 16
-
-static uint64
-cfs_charge(uint64 cycles, uint weight)
-{
-  uint factor = (NICE_0_LOAD << CFS_SHIFT) / weight;
-  return (cycles * factor) >> CFS_SHIFT;
-}
-
-static uint
-cfs_weight(int nice_value)
-{
-  static const uint weights[NICE_MAX - NICE_MIN + 1] = {
-    88761, 71755, 56483, 46273, 36291,
-    29154, 23254, 18705, 14949, 11916,
-     9548,  7620,  6100,  4904,  3906,
-     3121,  2501,  1991,  1586,  1277,
-     1024,   820,   655,   526,   423,
-      335,   272,   215,   172,   137,
-      110,    87,    70,    56,    45,
-       36,    29,    23,    18,    15
-  };
-
-  if(nice_value < NICE_MIN)
-    nice_value = NICE_MIN;
-  if(nice_value > NICE_MAX)
-    nice_value = NICE_MAX;
-  return weights[nice_value - NICE_MIN];
-}
-
-static int
-rb_color(struct proc *p)
-{
-  return p ? p->rb_color : RB_BLACK;
-}
-
-static int
-rb_less(struct proc *a, struct proc *b)
-{
-  if(a->vruntime != b->vruntime)
-    return a->vruntime < b->vruntime;
-  return a->pid < b->pid;
-}
-
-static void
-rb_rotate_left(struct proc *x)
-{
-  struct proc *y = x->rb_right;
-
-  x->rb_right = y->rb_left;
-  if(y->rb_left)
-    y->rb_left->rb_parent = x;
-  y->rb_parent = x->rb_parent;
-  if(x->rb_parent == 0)
-    ptable.cfs_root = y;
-  else if(x == x->rb_parent->rb_left)
-    x->rb_parent->rb_left = y;
-  else
-    x->rb_parent->rb_right = y;
-  y->rb_left = x;
-  x->rb_parent = y;
-}
-
-static void
-rb_rotate_right(struct proc *x)
-{
-  struct proc *y = x->rb_left;
-
-  x->rb_left = y->rb_right;
-  if(y->rb_right)
-    y->rb_right->rb_parent = x;
-  y->rb_parent = x->rb_parent;
-  if(x->rb_parent == 0)
-    ptable.cfs_root = y;
-  else if(x == x->rb_parent->rb_right)
-    x->rb_parent->rb_right = y;
-  else
-    x->rb_parent->rb_left = y;
-  y->rb_right = x;
-  x->rb_parent = y;
-}
-
-static void
-rb_insert_fixup(struct proc *z)
-{
-  struct proc *y;
-
-  while(z->rb_parent && z->rb_parent->rb_color == RB_RED){
-    if(z->rb_parent == z->rb_parent->rb_parent->rb_left){
-      y = z->rb_parent->rb_parent->rb_right;
-      if(rb_color(y) == RB_RED){
-        z->rb_parent->rb_color = RB_BLACK;
-        y->rb_color = RB_BLACK;
-        z->rb_parent->rb_parent->rb_color = RB_RED;
-        z = z->rb_parent->rb_parent;
-      } else {
-        if(z == z->rb_parent->rb_right){
-          z = z->rb_parent;
-          rb_rotate_left(z);
-        }
-        z->rb_parent->rb_color = RB_BLACK;
-        z->rb_parent->rb_parent->rb_color = RB_RED;
-        rb_rotate_right(z->rb_parent->rb_parent);
-      }
-    } else {
-      y = z->rb_parent->rb_parent->rb_left;
-      if(rb_color(y) == RB_RED){
-        z->rb_parent->rb_color = RB_BLACK;
-        y->rb_color = RB_BLACK;
-        z->rb_parent->rb_parent->rb_color = RB_RED;
-        z = z->rb_parent->rb_parent;
-      } else {
-        if(z == z->rb_parent->rb_left){
-          z = z->rb_parent;
-          rb_rotate_right(z);
-        }
-        z->rb_parent->rb_color = RB_BLACK;
-        z->rb_parent->rb_parent->rb_color = RB_RED;
-        rb_rotate_left(z->rb_parent->rb_parent);
-      }
-    }
-  }
-  ptable.cfs_root->rb_color = RB_BLACK;
-}
-
-static void
-rb_insert(struct proc *z)
-{
-  struct proc *x;
-  struct proc *parent = 0;
-
-  if(z->rb_in_tree)
-    panic("rb insert");
-  x = ptable.cfs_root;
-  while(x){
-    parent = x;
-    if(rb_less(z, x))
-      x = x->rb_left;
-    else
-      x = x->rb_right;
-  }
-  z->rb_parent = parent;
-  if(parent == 0)
-    ptable.cfs_root = z;
-  else if(rb_less(z, parent))
-    parent->rb_left = z;
-  else
-    parent->rb_right = z;
-  z->rb_left = 0;
-  z->rb_right = 0;
-  z->rb_color = RB_RED;
-  z->rb_in_tree = 1;
-  rb_insert_fixup(z);
-}
-
-static struct proc*
-rb_min(struct proc *root)
-{
-  if(root == 0)
-    return 0;
-  while(root->rb_left)
-    root = root->rb_left;
-  return root;
-}
-
-static void
-rb_transplant(struct proc *old, struct proc *new)
-{
-  if(old->rb_parent == 0)
-    ptable.cfs_root = new;
-  else if(old == old->rb_parent->rb_left)
-    old->rb_parent->rb_left = new;
-  else
-    old->rb_parent->rb_right = new;
-  if(new)
-    new->rb_parent = old->rb_parent;
-}
-
-static void
-rb_delete_fixup(struct proc *x, struct proc *parent)
-{
-  struct proc *w;
-
-  while(x != ptable.cfs_root && rb_color(x) == RB_BLACK){
-    if(x == (parent ? parent->rb_left : 0)){
-      w = parent ? parent->rb_right : 0;
-      if(rb_color(w) == RB_RED){
-        w->rb_color = RB_BLACK;
-        parent->rb_color = RB_RED;
-        rb_rotate_left(parent);
-        w = parent->rb_right;
-      }
-      if(rb_color(w ? w->rb_left : 0) == RB_BLACK &&
-         rb_color(w ? w->rb_right : 0) == RB_BLACK){
-        if(w)
-          w->rb_color = RB_RED;
-        x = parent;
-        parent = x ? x->rb_parent : 0;
-      } else {
-        if(rb_color(w ? w->rb_right : 0) == RB_BLACK){
-          if(w && w->rb_left)
-            w->rb_left->rb_color = RB_BLACK;
-          if(w)
-            w->rb_color = RB_RED;
-          if(w)
-            rb_rotate_right(w);
-          w = parent ? parent->rb_right : 0;
-        }
-        if(w)
-          w->rb_color = parent ? parent->rb_color : RB_BLACK;
-        if(parent)
-          parent->rb_color = RB_BLACK;
-        if(w && w->rb_right)
-          w->rb_right->rb_color = RB_BLACK;
-        if(parent)
-          rb_rotate_left(parent);
-        x = ptable.cfs_root;
-        parent = 0;
-      }
-    } else {
-      w = parent ? parent->rb_left : 0;
-      if(rb_color(w) == RB_RED){
-        w->rb_color = RB_BLACK;
-        parent->rb_color = RB_RED;
-        rb_rotate_right(parent);
-        w = parent->rb_left;
-      }
-      if(rb_color(w ? w->rb_right : 0) == RB_BLACK &&
-         rb_color(w ? w->rb_left : 0) == RB_BLACK){
-        if(w)
-          w->rb_color = RB_RED;
-        x = parent;
-        parent = x ? x->rb_parent : 0;
-      } else {
-        if(rb_color(w ? w->rb_left : 0) == RB_BLACK){
-          if(w && w->rb_right)
-            w->rb_right->rb_color = RB_BLACK;
-          if(w)
-            w->rb_color = RB_RED;
-          if(w)
-            rb_rotate_left(w);
-          w = parent ? parent->rb_left : 0;
-        }
-        if(w)
-          w->rb_color = parent ? parent->rb_color : RB_BLACK;
-        if(parent)
-          parent->rb_color = RB_BLACK;
-        if(w && w->rb_left)
-          w->rb_left->rb_color = RB_BLACK;
-        if(parent)
-          rb_rotate_right(parent);
-        x = ptable.cfs_root;
-        parent = 0;
-      }
-    }
-  }
-  if(x)
-    x->rb_color = RB_BLACK;
-}
-
-static void
-rb_delete(struct proc *z)
-{
-  struct proc *y = z;
-  struct proc *x;
-  struct proc *parent;
-  int color = y->rb_color;
-
-  if(!z->rb_in_tree)
-    panic("rb delete");
-  if(z->rb_left == 0){
-    x = z->rb_right;
-    parent = z->rb_parent;
-    rb_transplant(z, z->rb_right);
-  } else if(z->rb_right == 0){
-    x = z->rb_left;
-    parent = z->rb_parent;
-    rb_transplant(z, z->rb_left);
-  } else {
-    y = rb_min(z->rb_right);
-    color = y->rb_color;
-    x = y->rb_right;
-    if(y->rb_parent == z){
-      parent = y;
-      if(x)
-        x->rb_parent = y;
-    } else {
-      parent = y->rb_parent;
-      rb_transplant(y, y->rb_right);
-      y->rb_right = z->rb_right;
-      y->rb_right->rb_parent = y;
-    }
-    rb_transplant(z, y);
-    y->rb_left = z->rb_left;
-    y->rb_left->rb_parent = y;
-    y->rb_color = z->rb_color;
-  }
-  z->rb_left = 0;
-  z->rb_right = 0;
-  z->rb_parent = 0;
-  z->rb_in_tree = 0;
-  if(color == RB_BLACK)
-    rb_delete_fixup(x, parent);
-}
-
-//PAGEBREAK!
-// Run-queue bookkeeping shared by all three schedulers.
-// Every RUNNABLE process is in the CFS tree and has a FIFO sequence number,
-// whichever scheduler is active, so switching schedulers never has to
-// rebuild anything except the vruntime keys (see cfs_reset_vruntime).
-// All of these require ptable.lock.
-
-// Advance min_vruntime to the smallest vruntime still waiting in the tree.
-// min_vruntime never goes backwards; it is the floor that waking and newly
-// forked processes are lifted to, so they cannot use a stale (small) vruntime
-// to monopolise the CPU. O(log n) via the tree instead of scanning ptable.
-static void
-cfs_update_min_vruntime(void)
-{
-  struct proc *left = rb_min(ptable.cfs_root);
-
-  if(left && left->vruntime > ptable.min_vruntime)
-    ptable.min_vruntime = left->vruntime;
-}
-
-// Put a process that is already marked RUNNABLE at the tail of the run queue.
-static void
-runqueue_add(struct proc *p)
-{
-  p->fifo_seq = ++ptable.fifo_seq;
-  rb_insert(p);
-}
-
-// Make a sleeping, killed or brand-new process RUNNABLE. Such a process may
-// not have run for a long time, so its vruntime is raised to min_vruntime.
-static void
-make_runnable(struct proc *p)
-{
-  if(p->vruntime < ptable.min_vruntime)
-    p->vruntime = ptable.min_vruntime;
-  p->state = RUNNABLE;
-  runqueue_add(p);
-}
-
-// Called when switching into CFS from RR or FIFO. While another scheduler
-// was active, vruntime stopped advancing for processes that ran but kept
-// whatever value they had from any earlier CFS period. Those values are
-// stale relative to each other, so start every process from zero. The tree
-// is keyed on vruntime, so take every node out, reset, and reinsert.
-static void
-cfs_reset_vruntime(void)
-{
-  struct proc *queued[NPROC];
-  struct proc *p;
-  int n = 0, i;
-
-  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++)
-    if(p->rb_in_tree)
-      queued[n++] = p;
-  for(i = 0; i < n; i++)
-    rb_delete(queued[i]);
-
-  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-    if(p->state == UNUSED)
-      continue;
-    p->vruntime = 0;
-    // A process still running from an earlier CFS period must not be
-    // charged for this run against its new zero baseline.
-    p->cfs_accounting = 0;
-  }
-  ptable.min_vruntime = 0;
-
-  for(i = 0; i < n; i++)
-    rb_insert(queued[i]);
+  return ptable.proc;
 }
 
 void
 pinit(void)
 {
   initlock(&ptable.lock, "ptable");
+  sched_init();
 }
 
 // Must be called with interrupts disabled
@@ -475,10 +49,10 @@ struct cpu*
 mycpu(void)
 {
   int apicid, i;
-  
+
   if(readeflags()&FL_IF)
     panic("mycpu called with interrupts enabled\n");
-  
+
   apicid = lapicid();
   // APIC IDs are not guaranteed to be contiguous. Maybe we should have
   // a reverse map, or reserve a register to store &cpus[i].
@@ -500,6 +74,15 @@ myproc(void) {
   p = c->proc;
   popcli();
   return p;
+}
+
+// Make a new, sleeping or killed process RUNNABLE and hand it to the
+// active scheduler. Caller holds ptable.lock.
+static void
+make_runnable(struct proc *p)
+{
+  p->state = RUNNABLE;
+  sched_wakeup(p);
 }
 
 //PAGEBREAK: 32
@@ -526,19 +109,23 @@ found:
   p->state = EMBRYO;
   p->pid = nextpid++;
 
-  p->ctime = ticks; // Set creation time of the process
+  // Scheduling state.
+  p->nice_value = NICE_DEFAULT;
+  p->on_rq = 0;
+  p->ctime = ticks;
   p->etime = 0;
   p->first_run = 0;
   p->has_run = 0;
   p->wtime = 0;
   p->stime = 0;
-  p->fifo_seq = 0;
-
-  p->vruntime = 0;
   p->exec_time = 0;
   p->run_start = 0;
+  p->rq_next = 0;
+  p->rq_prev = 0;
+  p->vruntime = 0;
   p->cfs_accounting = 0;
-  p->nice_value = NICE_DEFAULT;
+  p->cfs_load = 0;
+  p->slice_ticks = 0;
 
   release(&ptable.lock);
 
@@ -575,7 +162,7 @@ userinit(void)
   extern char _binary_initcode_start[], _binary_initcode_size[];
 
   p = allocproc();
-  
+
   initproc = p;
   if((p->pgdir = setupkvm()) == 0)
     panic("userinit: out of memory?");
@@ -649,8 +236,10 @@ fork(void)
   }
   np->sz = curproc->sz;
   np->parent = curproc;
-  np->vruntime = curproc->vruntime;
+  // The child inherits its parent's nice value and starts at its parent's
+  // vruntime (CFS lifts it to min_vruntime if the parent is behind).
   np->nice_value = curproc->nice_value;
+  np->vruntime = curproc->vruntime;
   *np->tf = *curproc->tf;
 
   // Clear %eax so that fork returns 0 in the child.
@@ -747,7 +336,7 @@ wait_common(struct waitinfo *wi)
           wi->ctime = p->ctime;
           wi->first_run = p->has_run ? p->first_run : p->etime;
           wi->etime = p->etime;
-          wi->rtime = cycles_to_ticks(p->exec_time);
+          wi->rtime = sched_cycles_to_ticks(p->exec_time);
           wi->wtime = p->wtime;
           wi->stime = p->stime;
         }
@@ -789,227 +378,47 @@ waitx(struct waitinfo *wi)
   return wait_common(wi);
 }
 
-// Called on every timer tick (CPU 0 only), before sleepers on &ticks are
-// woken, to sample how much time each process spends waiting or sleeping.
-// (Run time is measured exactly in cycles instead; see run_cycles.)
-// Also measures the TSC rate so run time can be reported in ticks.
-void
-update_times(void)
-{
-  static uint64 last_tsc;
-  uint64 now = rdtsc();
-  struct proc *p;
-
-  acquire(&ptable.lock);
-  if(last_tsc){
-    uint d = (uint)(now - last_tsc);
-    // Smooth over 8 ticks so one late interrupt does not skew the rate.
-    if(cycles_per_tick == 0)
-      cycles_per_tick = d;
-    else
-      cycles_per_tick = cycles_per_tick - cycles_per_tick / 8 + d / 8;
-  }
-  last_tsc = now;
-
-  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-    switch(p->state){
-    case RUNNABLE: p->wtime++; break;
-    case SLEEPING: p->stime++; break;
-    default: break;
-    }
-  }
-  release(&ptable.lock);
-}
-
-// Copy a snapshot of up to max live processes into out. Returns the count.
-int
-getpinfo(struct pinfo *out, int max)
-{
-  struct proc *p;
-  int n = 0;
-
-  acquire(&ptable.lock);
-  for(p = ptable.proc; p < &ptable.proc[NPROC] && n < max; p++){
-    if(p->state == UNUSED)
-      continue;
-    out[n].pid = p->pid;
-    out[n].ppid = p->parent ? p->parent->pid : 0;
-    out[n].state = p->state;
-    out[n].nice = p->nice_value;
-    out[n].vruntime = p->vruntime;
-    out[n].ctime = p->ctime;
-    out[n].rtime = cycles_to_ticks(run_cycles(p));
-    out[n].wtime = p->wtime;
-    out[n].stime = p->stime;
-    safestrcpy(out[n].name, p->name, sizeof(out[n].name));
-    n++;
-  }
-  release(&ptable.lock);
-  return n;
-}
-
-// Set the nice value of the process with the given pid.
-// A RUNNABLE process's tree key (vruntime) does not depend on nice, so no
-// requeue is needed; the new weight applies from its next charge.
-int
-renice(int pid, int nice)
-{
-  struct proc *p;
-
-  if(nice < NICE_MIN || nice > NICE_MAX)
-    return -1;
-
-  acquire(&ptable.lock);
-  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
-    if(p->pid == pid && p->state != UNUSED && p->state != ZOMBIE){
-      p->nice_value = nice;
-      release(&ptable.lock);
-      return 0;
-    }
-  }
-  release(&ptable.lock);
-  return -1;
-}
-
 //PAGEBREAK: 42
 // Per-CPU process scheduler.
 // Each CPU calls scheduler() after setting itself up.
 // Scheduler never returns.  It loops, doing:
-//  - choose a process to run
+//  - ask the active scheduling class for the next process
 //  - swtch to start running that process
 //  - eventually that process transfers control
 //      via swtch back to the scheduler.
-
-// Next ptable slot RR starts scanning from. Protected by ptable.lock.
-// Resuming after the last pick (rather than always at slot 0) is what makes
-// this round-robin; otherwise low slots would starve the rest.
-static int rr_next;
-
-struct proc*
-scheduler_RR(void)
-{
-  struct proc *p;
-  int i, idx;
-
-  for(i = 0; i < NPROC; i++) {
-    idx = (rr_next + i) % NPROC;
-    p = &ptable.proc[idx];
-    if(p->state != RUNNABLE)
-      continue;
-
-    rr_next = (idx + 1) % NPROC;
-    return p;
-  }
-
-  return 0;
-}
-
-// FIFO: run the process that became RUNNABLE earliest. fifo_seq is a strictly
-// increasing counter stamped whenever a process joins the run queue (fork,
-// wakeup, kill, or yield), so there are no ties and slot reuse in ptable does
-// not matter. A process that blocks goes to the back of the queue when it
-// wakes up. FIFO is non-preemptive: trap() does not yield on timer ticks
-// while it is active, so a process runs until it blocks or exits.
-struct proc*
-scheduler_FCFS(void)
-{
-  struct proc *p;
-  struct proc *selected_proc = 0;
-
-  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
-    if(p->state != RUNNABLE)
-      continue;
-
-    if(selected_proc == 0 || p->fifo_seq < selected_proc->fifo_seq)
-      selected_proc = p;
-  }
-
-  return selected_proc;
-}
-
-struct proc*
-scheduler_CFS(void)
-{
-  return rb_min(ptable.cfs_root);
-}
-
-int
-set_scheduler(int scheduler)
-{
-  if(scheduler < SCHED_RR || scheduler > SCHED_CFS)
-    return -1;
-
-  acquire(&ptable.lock);
-  if(scheduler == SCHED_CFS && current_scheduler != SCHED_CFS)
-    cfs_reset_vruntime();
-  current_scheduler = scheduler;
-  release(&ptable.lock);
-  return 0;
-}
-
-int
-get_scheduler(void)
-{
-  int scheduler;
-
-  acquire(&ptable.lock);
-  scheduler = current_scheduler;
-  release(&ptable.lock);
-  return scheduler;
-}
-
-struct proc*
-select_process(void)
-{
-  switch(current_scheduler) {
-    case SCHED_RR:
-      return scheduler_RR();
-
-    case SCHED_FCFS:
-      return scheduler_FCFS();
-
-    case SCHED_CFS:
-      return scheduler_CFS();
-
-    default:
-      return scheduler_RR();
-  }
-}
-
 void
 scheduler(void)
 {
+  struct proc *p;
   struct cpu *c = mycpu();
   c->proc = 0;
-  
+
   for(;;){
     // Enable interrupts on this processor.
     sti();
 
-    // Loop over process table looking for process to run.
     acquire(&ptable.lock);
-    
-    struct proc *p = select_process();
-
+    p = sched_pick();
     if(p != 0){
-      rb_delete(p);
+      // Switch to chosen process.  It is the process's job
+      // to release ptable.lock and then reacquire it
+      // before jumping back to us.
       c->proc = p;
       switchuvm(p);
-
       p->state = RUNNING;
       if(!p->has_run){
         p->has_run = 1;
         p->first_run = ticks;
       }
-      p->run_start = run_clock();
-      p->cfs_accounting = current_scheduler == SCHED_CFS;
+      sched_start(p);
 
       swtch(&(c->scheduler), p->context);
-
       switchkvm();
+
+      // Process is done running for now.
+      // It should have changed its p->state before coming back.
       c->proc = 0;
     }
-
     release(&ptable.lock);
   }
 }
@@ -1035,16 +444,7 @@ sched(void)
     panic("sched running");
   if(readeflags()&FL_IF)
     panic("sched interruptible");
-  uint64 elapsed = run_clock() - p->run_start;
-  p->exec_time += elapsed;
-  if(p->cfs_accounting){
-    p->vruntime += cfs_charge(elapsed, cfs_weight(p->nice_value));
-    p->cfs_accounting = 0;
-  }
-  if(p->state == RUNNABLE)
-    runqueue_add(p);   // preempted (yield): back of the queue
-  if(current_scheduler == SCHED_CFS)
-    cfs_update_min_vruntime();
+  sched_stop(p);   // charge CPU time; requeue if still RUNNABLE
   intena = mycpu()->intena;
   swtch(&p->context, mycpu()->scheduler);
   mycpu()->intena = intena;
@@ -1058,6 +458,21 @@ yield(void)
   myproc()->state = RUNNABLE;
   sched();
   release(&ptable.lock);
+}
+
+// Timer tick in the current process: ask the scheduling class whether it
+// has used up its time slice, and yield if so. Called from trap().
+void
+preempt_tick(void)
+{
+  struct proc *p = myproc();
+  int preempt;
+
+  acquire(&ptable.lock);
+  preempt = p->state == RUNNING && sched_tick(p);
+  release(&ptable.lock);
+  if(preempt)
+    yield();
 }
 
 // A fork child's very first scheduling by scheduler()
@@ -1087,7 +502,7 @@ void
 sleep(void *chan, struct spinlock *lk)
 {
   struct proc *p = myproc();
-  
+
   if(p == 0)
     panic("sleep");
 
@@ -1163,6 +578,149 @@ kill(int pid)
   }
   release(&ptable.lock);
   return -1;
+}
+
+//PAGEBREAK!
+// Scheduler-related system call bodies. Each takes ptable.lock, which
+// protects all scheduler state.
+
+int
+set_scheduler(int s)
+{
+  int r;
+
+  acquire(&ptable.lock);
+  r = sched_set_policy(s);
+  release(&ptable.lock);
+  return r;
+}
+
+int
+get_scheduler(void)
+{
+  int s;
+
+  acquire(&ptable.lock);
+  s = sched_get_policy();
+  release(&ptable.lock);
+  return s;
+}
+
+// Called on every timer tick (CPU 0 only), before sleepers on &ticks are
+// woken, to sample how much time each process spends waiting or sleeping.
+// (CPU time is measured exactly in cycles instead; see sched_stop.)
+void
+update_times(void)
+{
+  struct proc *p;
+
+  acquire(&ptable.lock);
+  sched_clock_tick();
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+    switch(p->state){
+    case RUNNABLE: p->wtime++; break;
+    case SLEEPING: p->stime++; break;
+    default: break;
+    }
+  }
+  release(&ptable.lock);
+}
+
+// Copy a snapshot of up to max live processes into out. Returns the count.
+int
+getpinfo(struct pinfo *out, int max)
+{
+  struct proc *p;
+  uint64 cycles;
+  int n = 0;
+
+  acquire(&ptable.lock);
+  for(p = ptable.proc; p < &ptable.proc[NPROC] && n < max; p++){
+    if(p->state == UNUSED)
+      continue;
+    cycles = p->exec_time;
+    if(p->state == RUNNING)
+      cycles += sched_clock() - p->run_start;
+    out[n].pid = p->pid;
+    out[n].ppid = p->parent ? p->parent->pid : 0;
+    out[n].state = p->state;
+    out[n].nice = p->nice_value;
+    out[n].vruntime = p->vruntime;
+    out[n].ctime = p->ctime;
+    out[n].rtime = sched_cycles_to_ticks(cycles);
+    out[n].wtime = p->wtime;
+    out[n].stime = p->stime;
+    safestrcpy(out[n].name, p->name, sizeof(out[n].name));
+    n++;
+  }
+  release(&ptable.lock);
+  return n;
+}
+
+// Set the nice value of the process with the given pid. The new weight
+// applies from the process's next CFS charge / time-slice computation.
+int
+renice(int pid, int nice)
+{
+  struct proc *p;
+
+  if(nice < NICE_MIN || nice > NICE_MAX)
+    return -1;
+
+  acquire(&ptable.lock);
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+    if(p->pid == pid && p->state != UNUSED && p->state != ZOMBIE){
+      p->nice_value = nice;
+      release(&ptable.lock);
+      return 0;
+    }
+  }
+  release(&ptable.lock);
+  return -1;
+}
+
+int
+schedtune(int latency, int min_gran)
+{
+  int r;
+
+  acquire(&ptable.lock);
+  r = sched_tune(latency, min_gran);
+  release(&ptable.lock);
+  return r;
+}
+
+int
+schedstat(int cmd, struct schedstat *st)
+{
+  int r;
+
+  acquire(&ptable.lock);
+  r = sched_stat(cmd, st);
+  release(&ptable.lock);
+  return r;
+}
+
+int
+tracectl(int cmd)
+{
+  int r;
+
+  acquire(&ptable.lock);
+  r = sched_tracectl(cmd);
+  release(&ptable.lock);
+  return r;
+}
+
+int
+traceread(struct trace_event *dst, int start, int n)
+{
+  int r;
+
+  acquire(&ptable.lock);
+  r = sched_traceread(dst, start, n);
+  release(&ptable.lock);
+  return r;
 }
 
 //PAGEBREAK: 36
