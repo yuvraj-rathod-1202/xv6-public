@@ -1,0 +1,32 @@
+name: scheduler tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install 32-bit toolchain and QEMU
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-multilib qemu-system-x86 perl python3
+
+      - name: Full test suite (unit tests, debug-kernel tests on 1/2/4 CPUs, usertests, benchmarks)
+        run: make test-full
+
+      - name: Summary
+        if: always()
+        run: cat results/summary.md >> "$GITHUB_STEP_SUMMARY" || true
+
+      - name: Upload logs, benchmark results and Gantt charts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scheduler-test-results
+          path: results/

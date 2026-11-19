@@ -14,3 +14,8 @@ kernel
 kernelmemfs
 mkfs
 .gdbinit
+
+# scheduler project
+results/
+tests/rbtree_test
+__pycache__/
