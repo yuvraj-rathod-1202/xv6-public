@@ -175,9 +175,14 @@ UPROGS=\
 	_ln\
 	_ls\
 	_mkdir\
+	_nice\
+	_ps\
+	_renice\
 	_rm\
 	_sh\
+	_schedbench\
 	_schedctl\
+	_schedtest\
 	_stressfs\
 	_usertests\
 	_wc\

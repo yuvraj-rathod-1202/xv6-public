@@ -24,3 +24,6 @@
 #define SYS_getscheduler 23
 #define SYS_setnice 24
 #define SYS_getnice 25
+#define SYS_getpinfo 26
+#define SYS_waitx 27
+#define SYS_renice 28

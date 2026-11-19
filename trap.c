@@ -51,6 +51,9 @@ trap(struct trapframe *tf)
     if(cpuid() == 0){
       acquire(&tickslock);
       ticks++;
+      // Sample process states before waking sleepers on &ticks, or every
+      // process in sleep() would be seen as RUNNABLE on every tick.
+      update_times();
       wakeup(&ticks);
       release(&tickslock);
     }
@@ -102,8 +105,10 @@ trap(struct trapframe *tf)
 
   // Force process to give up CPU on clock tick.
   // If interrupts were on while locks held, would need to check nlock.
+  // FIFO is non-preemptive: the running process keeps the CPU until it
+  // blocks or exits, so no yield on timer ticks while FIFO is active.
   if(myproc() && myproc()->state == RUNNING &&
-     tf->trapno == T_IRQ0+IRQ_TIMER) {
+     tf->trapno == T_IRQ0+IRQ_TIMER && current_scheduler != SCHED_FCFS) {
     yield();
   }
 

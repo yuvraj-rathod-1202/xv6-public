@@ -1,5 +1,7 @@
 struct stat;
 struct rtcdate;
+struct pinfo;
+struct waitinfo;
 
 // system calls
 int fork(void);
@@ -27,6 +29,9 @@ int setscheduler(int);
 int getscheduler(void);
 int setnice(int);
 int getnice(void);
+int getpinfo(struct pinfo*, int);
+int waitx(struct waitinfo*);
+int renice(int, int);
 
 // ulib.c
 int stat(const char*, struct stat*);

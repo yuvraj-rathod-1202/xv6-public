@@ -34,13 +34,8 @@ struct context {
 
 enum procstate { UNUSED, EMBRYO, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 
+#include "sched.h"   // SCHED_*, NICE_*, struct pinfo, struct waitinfo
 
-#define SCHED_RR 0
-#define SCHED_FCFS 1
-#define SCHED_CFS 2
-#define NICE_MIN -20
-#define NICE_MAX 19
-#define NICE_DEFAULT 0
 #define NICE_0_LOAD 1024
 
 extern int current_scheduler;
@@ -61,10 +56,16 @@ struct proc {
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
 
-  uint ctime;                  // Creation time
-  uint64 vruntime;             // Virtual runtime for CFS scheduling
-  uint64 exec_time;            // Total execution time for CFS scheduling
-  uint64 cfs_start_time;       // Start time for CFS scheduling
+  uint ctime;                  // Creation time (ticks)
+  uint etime;                  // Exit time (ticks)
+  uint first_run;              // Tick of first dispatch (valid if has_run)
+  int has_run;                 // Has been dispatched at least once
+  uint wtime;                  // Ticks spent RUNNABLE
+  uint stime;                  // Ticks spent SLEEPING
+  uint64 fifo_seq;             // Order in which it last became RUNNABLE (FIFO)
+  uint64 vruntime;             // Virtual runtime for CFS (weighted CPU cycles)
+  uint64 exec_time;            // Total CPU cycles spent RUNNING (any scheduler)
+  uint64 run_start;            // TSC value when the current run started
   int cfs_accounting;          // Whether the current run interval is CFS-accounted
   int nice_value;              // User nice value, from NICE_MIN through NICE_MAX
   struct proc *rb_left;

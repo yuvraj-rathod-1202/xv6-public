@@ -91,6 +91,7 @@ extern int sys_fork(void);
 extern int sys_fstat(void);
 extern int sys_getpid(void);
 extern int sys_getnice(void);
+extern int sys_getpinfo(void);
 extern int sys_getscheduler(void);
 extern int sys_kill(void);
 extern int sys_link(void);
@@ -102,6 +103,8 @@ extern int sys_read(void);
 extern int sys_sbrk(void);
 extern int sys_setscheduler(void);
 extern int sys_setnice(void);
+extern int sys_renice(void);
+extern int sys_waitx(void);
 extern int sys_sleep(void);
 extern int sys_unlink(void);
 extern int sys_wait(void);
@@ -134,6 +137,9 @@ static int (*syscalls[])(void) = {
 [SYS_getscheduler] sys_getscheduler,
 [SYS_setnice] sys_setnice,
 [SYS_getnice] sys_getnice,
+[SYS_getpinfo] sys_getpinfo,
+[SYS_waitx]   sys_waitx,
+[SYS_renice]  sys_renice,
 };
 
 void

@@ -1,5 +1,15 @@
 // Routines to let C code use special x86 instructions.
 
+// Read the CPU's time-stamp counter (cycles since reset).
+static inline uint64
+rdtsc(void)
+{
+  uint lo, hi;
+
+  asm volatile("rdtsc" : "=a" (lo), "=d" (hi));
+  return ((uint64)hi << 32) | lo;
+}
+
 static inline uchar
 inb(ushort port)
 {

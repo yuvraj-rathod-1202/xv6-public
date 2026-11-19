@@ -33,3 +33,7 @@ SYSCALL(setscheduler)
 SYSCALL(getscheduler)
 SYSCALL(setnice)
 SYSCALL(getnice)
+
+SYSCALL(getpinfo)
+SYSCALL(waitx)
+SYSCALL(renice)

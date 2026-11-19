@@ -3,12 +3,14 @@ struct context;
 struct file;
 struct inode;
 struct pipe;
+struct pinfo;
 struct proc;
 struct rtcdate;
 struct spinlock;
 struct sleeplock;
 struct stat;
 struct superblock;
+struct waitinfo;
 
 // bio.c
 void            binit(void);
@@ -107,6 +109,7 @@ int             cpuid(void);
 void            exit(void);
 int             fork(void);
 int             get_scheduler(void);
+int             getpinfo(struct pinfo*, int);
 int             growproc(int);
 int             kill(int);
 struct cpu*     mycpu(void);
@@ -116,10 +119,13 @@ void            procdump(void);
 void            scheduler(void) __attribute__((noreturn));
 void            sched(void);
 void            setproc(struct proc*);
+int             renice(int, int);
 int             set_scheduler(int);
 void            sleep(void*, struct spinlock*);
 void            userinit(void);
+void            update_times(void);
 int             wait(void);
+int             waitx(struct waitinfo*);
 void            wakeup(void*);
 void            yield(void);
 

@@ -128,3 +128,39 @@ sys_getnice(void)
 {
   return myproc()->nice_value;
 }
+
+// getpinfo(struct pinfo *buf, int max): snapshot up to max processes.
+int
+sys_getpinfo(void)
+{
+  struct pinfo *buf;
+  int max;
+
+  if(argint(1, &max) < 0 || max < 0 || max > NPROC)
+    return -1;
+  if(argptr(0, (char**)&buf, max * sizeof(struct pinfo)) < 0)
+    return -1;
+  return getpinfo(buf, max);
+}
+
+// waitx(struct waitinfo *wi): wait() that also reports the child's timings.
+int
+sys_waitx(void)
+{
+  struct waitinfo *wi;
+
+  if(argptr(0, (char**)&wi, sizeof(*wi)) < 0)
+    return -1;
+  return waitx(wi);
+}
+
+// renice(int pid, int nice): change another process's nice value.
+int
+sys_renice(void)
+{
+  int pid, nice;
+
+  if(argint(0, &pid) < 0 || argint(1, &nice) < 0)
+    return -1;
+  return renice(pid, nice);
+}
