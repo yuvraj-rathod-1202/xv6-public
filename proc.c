@@ -32,7 +32,12 @@ cfs_time(void)
   return ticks;
 }
 
-static uint64
+// vruntime is kept in units of 1/CFS_VRUNTIME_SCALE of a tick. Without this
+// scaling, a 1-tick run at any negative nice (weight > NICE_0_LOAD) would add
+// 1 * 1024 / weight == 0, freezing vruntime and starving everyone else.
+#define CFS_VRUNTIME_SCALE 1024
+
+static uint
 cfs_weight(int nice_value)
 {
   static const uint weights[NICE_MAX - NICE_MIN + 1] = {
@@ -46,6 +51,10 @@ cfs_weight(int nice_value)
        36,    29,    23,    18,    15
   };
 
+  if(nice_value < NICE_MIN)
+    nice_value = NICE_MIN;
+  if(nice_value > NICE_MAX)
+    nice_value = NICE_MAX;
   return weights[nice_value - NICE_MIN];
 }
 
@@ -637,15 +646,24 @@ wait(void)
 //  - eventually that process transfers control
 //      via swtch back to the scheduler.
 
+// Next ptable slot RR starts scanning from. Protected by ptable.lock.
+// Resuming after the last pick (rather than always at slot 0) is what makes
+// this round-robin; otherwise low slots would starve the rest.
+static int rr_next;
+
 struct proc*
 scheduler_RR(void)
 {
   struct proc *p;
+  int i, idx;
 
-  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
+  for(i = 0; i < NPROC; i++) {
+    idx = (rr_next + i) % NPROC;
+    p = &ptable.proc[idx];
     if(p->state != RUNNABLE)
       continue;
 
+    rr_next = (idx + 1) % NPROC;
     return p;
   }
 
@@ -674,6 +692,29 @@ struct proc*
 scheduler_CFS(void)
 {
   return rb_min(ptable.cfs_root);
+}
+
+int
+set_scheduler(int scheduler)
+{
+  if(scheduler < SCHED_RR || scheduler > SCHED_CFS)
+    return -1;
+
+  acquire(&ptable.lock);
+  current_scheduler = scheduler;
+  release(&ptable.lock);
+  return 0;
+}
+
+int
+get_scheduler(void)
+{
+  int scheduler;
+
+  acquire(&ptable.lock);
+  scheduler = current_scheduler;
+  release(&ptable.lock);
+  return scheduler;
 }
 
 struct proc*
@@ -753,7 +794,8 @@ sched(void)
   if(p->cfs_accounting){
     uint64 elapsed = cfs_time() - p->cfs_start_time;
     p->exec_time += elapsed;
-    p->vruntime += elapsed * NICE_0_LOAD / cfs_weight(p->nice_value);
+    uint per_tick = (NICE_0_LOAD * CFS_VRUNTIME_SCALE) / cfs_weight(p->nice_value);
+    p->vruntime += elapsed * per_tick;
     p->cfs_accounting = 0;
   }
   if(p->state == RUNNABLE)

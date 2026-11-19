@@ -99,19 +99,14 @@ sys_setscheduler(void)
   if(argint(0, &scheduler) < 0)
     return -1;
 
-  if (scheduler < SCHED_RR || scheduler > SCHED_CFS)
-    return -1;
-
-  current_scheduler = scheduler;
-
-  return 0;
+  return set_scheduler(scheduler);
 }
 
 // get the current scheduler type
 int
 sys_getscheduler(void)
 {
-  return current_scheduler;
+  return get_scheduler();
 }
 
 int
