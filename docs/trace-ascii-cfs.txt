@@ -1,0 +1,34 @@
+schedtrace schedbench mix cfs
+schedbench: 210526 loop iterations per tick
+
+=== workload: mix (4 processes) ===
+-- CFS --
+  job  kind  amount  turnaround   waiting  response   cpu time
+  0    cpu      60       134      69       3      61
+  1    cpu      60       135      69       4      61
+  2    io       15        42      16      11       4
+  3    io       15        36      15       6       4
+
+summary (mix), averages in ticks:
+  sched   turnaround   waiting  response  makespan
+  CFS         86.7      42.2       6.0     136
+
+trace: 191 events over 144.9 ticks; one column = 2.4 ticks
+scheduler switches: R = rr, F = fifo, C = cfs
+
+pid name      |C                                                          R|
+25  schedbench|-#+  ++ +          --                                    +##|
+26  schedbench|  +-# ++++ +-++-+-++-#-++-#-++-#-++-#-+++# #++# #++# #++#   |
+27  schedbench|   #-+ +-+# ++++-++++ #++# #++# #++# #+++-#-++-#-++-#-++++  |
+28  schedbench|      --------------                                        |
+29  schedbench|        -------------                                       |
+24  schedtrace|                                                            |
+
+pid name        ran(ticks)  runs  avg run (= effective slice)
+25  schedbench  12.2	   9	 1.3
+26  schedbench  61.0	   25	 2.4
+27  schedbench  61.7	   26	 2.3
+28  schedbench  3.9	   17	 0.2
+29  schedbench  3.9	   16	 0.2
+24  schedtrace  0.0	   1	 0.0
+$ 

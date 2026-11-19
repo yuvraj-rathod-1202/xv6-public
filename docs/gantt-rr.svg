@@ -1,0 +1,255 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="278" font-family="monospace" font-size="12">
+<rect width="1100" height="278" fill="white"/>
+<text x="170" y="22" font-size="15" font-weight="bold">Round Robin: one 100-tick job, then four 20-tick jobs (1 CPU)</text>
+<line x1="170.0" y1="54" x2="170.0" y2="236" stroke="#ddd"/>
+<text x="170.0" y="250" text-anchor="middle">0</text>
+<line x1="247.7" y1="54" x2="247.7" y2="236" stroke="#ddd"/>
+<text x="247.7" y="250" text-anchor="middle">20</text>
+<line x1="325.3" y1="54" x2="325.3" y2="236" stroke="#ddd"/>
+<text x="325.3" y="250" text-anchor="middle">40</text>
+<line x1="403.0" y1="54" x2="403.0" y2="236" stroke="#ddd"/>
+<text x="403.0" y="250" text-anchor="middle">60</text>
+<line x1="480.7" y1="54" x2="480.7" y2="236" stroke="#ddd"/>
+<text x="480.7" y="250" text-anchor="middle">80</text>
+<line x1="558.3" y1="54" x2="558.3" y2="236" stroke="#ddd"/>
+<text x="558.3" y="250" text-anchor="middle">100</text>
+<line x1="636.0" y1="54" x2="636.0" y2="236" stroke="#ddd"/>
+<text x="636.0" y="250" text-anchor="middle">120</text>
+<line x1="713.7" y1="54" x2="713.7" y2="236" stroke="#ddd"/>
+<text x="713.7" y="250" text-anchor="middle">140</text>
+<line x1="791.3" y1="54" x2="791.3" y2="236" stroke="#ddd"/>
+<text x="791.3" y="250" text-anchor="middle">160</text>
+<line x1="869.0" y1="54" x2="869.0" y2="236" stroke="#ddd"/>
+<text x="869.0" y="250" text-anchor="middle">180</text>
+<line x1="946.7" y1="54" x2="946.7" y2="236" stroke="#ddd"/>
+<text x="946.7" y="250" text-anchor="middle">200</text>
+<text x="560.0" y="268" text-anchor="middle">time (ticks)</text>
+<text x="8" y="76">  3 schedtrace</text>
+<text x="958" y="76">  1 runs, avg 0.0</text>
+<text x="8" y="100">  4 schedbench</text>
+<rect x="172.37" y="88" width="0.60" height="16" fill="#4e79a7"/>
+<rect x="180.14" y="88" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="184.02" y="88" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="191.79" y="88" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="203.44" y="88" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="215.09" y="88" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="230.62" y="88" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="250.03" y="88" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="269.45" y="88" width="1.32" height="16" fill="#4e79a7"/>
+<rect x="580.12" y="88" width="0.60" height="16" fill="#4e79a7"/>
+<rect x="607.30" y="88" width="0.60" height="16" fill="#4e79a7"/>
+<rect x="626.72" y="88" width="0.60" height="16" fill="#4e79a7"/>
+<rect x="638.37" y="88" width="0.60" height="16" fill="#4e79a7"/>
+<rect x="923.71" y="88" width="1.86" height="16" fill="#4e79a7"/>
+<rect x="925.57" y="88" width="4.04" height="16" fill="#4e79a7"/>
+<rect x="929.61" y="88" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="933.53" y="88" width="3.73" height="16" fill="#4e79a7"/>
+<rect x="937.26" y="88" width="3.92" height="16" fill="#4e79a7"/>
+<rect x="941.18" y="88" width="4.00" height="16" fill="#4e79a7"/>
+<rect x="945.22" y="88" width="3.81" height="16" fill="#4e79a7"/>
+<rect x="949.03" y="88" width="0.97" height="16" fill="#4e79a7"/>
+<text x="958" y="100"> 22 runs, avg 0.7</text>
+<text x="8" y="124">  5 schedbench</text>
+<rect x="187.90" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="195.67" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="207.32" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="218.97" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="234.50" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="253.92" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="270.77" y="112" width="2.56" height="16" fill="#4e79a7"/>
+<rect x="288.87" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="308.28" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="327.70" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="347.12" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="366.53" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="385.95" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="405.37" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="424.78" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="444.20" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="463.62" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="483.03" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="502.45" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="521.87" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="541.28" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="560.70" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="576.23" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="591.77" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="603.42" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="615.07" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="622.83" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="630.60" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="634.60" y="112" width="3.77" height="16" fill="#4e79a7"/>
+<rect x="638.87" y="112" width="3.38" height="16" fill="#4e79a7"/>
+<rect x="642.25" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="646.13" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="650.01" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="653.90" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="657.78" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="661.66" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="665.55" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="669.43" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="673.31" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="677.20" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="681.08" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="684.96" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="688.85" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="692.73" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="696.61" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="700.50" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="704.38" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="708.26" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="712.15" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="716.03" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="719.91" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="723.80" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="727.68" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="731.56" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="735.45" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="739.33" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="743.21" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="747.10" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="750.98" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="754.86" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="758.75" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="762.63" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="766.51" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="770.40" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="774.28" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="778.16" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="782.05" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="785.93" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="789.81" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="793.70" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="797.58" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="801.46" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="805.35" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="809.23" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="813.11" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="817.00" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="820.88" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="824.76" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="828.65" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="832.53" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="836.41" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="840.30" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="844.18" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="848.06" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="851.95" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="855.83" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="859.71" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="863.60" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="867.48" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="871.36" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="875.25" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="879.13" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="883.01" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="886.90" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="890.78" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="894.66" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="898.55" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="902.43" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="906.31" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="910.20" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="914.08" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="917.96" y="112" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="921.85" y="112" width="1.86" height="16" fill="#4e79a7"/>
+<text x="958" y="124">103 runs, avg 1.0</text>
+<text x="8" y="148">  6 schedbench</text>
+<rect x="199.55" y="136" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="211.20" y="136" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="222.85" y="136" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="238.38" y="136" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="257.80" y="136" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="273.33" y="136" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="292.75" y="136" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="312.17" y="136" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="331.58" y="136" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="351.00" y="136" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="370.42" y="136" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="389.83" y="136" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="409.25" y="136" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="428.67" y="136" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="448.08" y="136" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="467.50" y="136" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="486.92" y="136" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="506.33" y="136" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="525.75" y="136" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="545.17" y="136" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="564.58" y="136" width="1.59" height="16" fill="#4e79a7"/>
+<text x="958" y="148"> 21 runs, avg 1.0</text>
+<text x="8" y="172">  7 schedbench</text>
+<rect x="226.74" y="160" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="242.27" y="160" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="261.68" y="160" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="277.22" y="160" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="296.63" y="160" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="316.05" y="160" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="335.47" y="160" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="354.88" y="160" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="374.30" y="160" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="393.72" y="160" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="413.13" y="160" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="432.55" y="160" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="451.97" y="160" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="471.38" y="160" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="490.80" y="160" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="510.22" y="160" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="529.63" y="160" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="549.05" y="160" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="566.17" y="160" width="2.29" height="16" fill="#4e79a7"/>
+<rect x="580.62" y="160" width="3.38" height="16" fill="#4e79a7"/>
+<rect x="595.65" y="160" width="3.65" height="16" fill="#4e79a7"/>
+<text x="958" y="172"> 21 runs, avg 1.0</text>
+<text x="8" y="196">  8 schedbench</text>
+<rect x="246.15" y="184" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="265.57" y="184" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="281.10" y="184" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="300.52" y="184" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="319.93" y="184" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="339.35" y="184" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="358.77" y="184" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="378.18" y="184" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="397.60" y="184" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="417.02" y="184" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="436.43" y="184" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="455.85" y="184" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="475.27" y="184" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="494.68" y="184" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="514.10" y="184" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="533.52" y="184" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="552.93" y="184" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="568.47" y="184" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="584.00" y="184" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="599.30" y="184" width="0.60" height="16" fill="#4e79a7"/>
+<rect x="607.80" y="184" width="3.38" height="16" fill="#4e79a7"/>
+<rect x="618.95" y="184" width="1.90" height="16" fill="#4e79a7"/>
+<text x="958" y="196"> 22 runs, avg 0.9</text>
+<text x="8" y="220">  9 schedbench</text>
+<rect x="284.98" y="208" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="304.40" y="208" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="323.82" y="208" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="343.23" y="208" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="362.65" y="208" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="382.07" y="208" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="401.48" y="208" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="420.90" y="208" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="440.32" y="208" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="459.73" y="208" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="479.15" y="208" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="498.57" y="208" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="517.98" y="208" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="537.40" y="208" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="556.82" y="208" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="572.35" y="208" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="587.88" y="208" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="599.53" y="208" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="611.18" y="208" width="3.88" height="16" fill="#4e79a7"/>
+<rect x="620.85" y="208" width="1.98" height="16" fill="#4e79a7"/>
+<rect x="627.22" y="208" width="3.38" height="16" fill="#4e79a7"/>
+<rect x="634.48" y="208" width="0.60" height="16" fill="#4e79a7"/>
+<text x="958" y="220"> 22 runs, avg 0.9</text>
+<line x1="170.0" y1="46" x2="170.0" y2="236" stroke="black" stroke-dasharray="4,3"/>
+<text x="173.0" y="44">RR</text>
+<rect x="170" y="32" width="12" height="12" fill="#4e79a7"/>
+<text x="186" y="43">cpu0</text>
+</svg>

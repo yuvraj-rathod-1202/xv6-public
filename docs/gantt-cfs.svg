@@ -1,0 +1,152 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="278" font-family="monospace" font-size="12">
+<rect width="1100" height="278" fill="white"/>
+<text x="170" y="22" font-size="15" font-weight="bold">CFS: one 100-tick job, then four 20-tick jobs (1 CPU)</text>
+<line x1="170.0" y1="54" x2="170.0" y2="236" stroke="#ddd"/>
+<text x="170.0" y="250" text-anchor="middle">0</text>
+<line x1="247.7" y1="54" x2="247.7" y2="236" stroke="#ddd"/>
+<text x="247.7" y="250" text-anchor="middle">20</text>
+<line x1="325.5" y1="54" x2="325.5" y2="236" stroke="#ddd"/>
+<text x="325.5" y="250" text-anchor="middle">40</text>
+<line x1="403.2" y1="54" x2="403.2" y2="236" stroke="#ddd"/>
+<text x="403.2" y="250" text-anchor="middle">60</text>
+<line x1="481.0" y1="54" x2="481.0" y2="236" stroke="#ddd"/>
+<text x="481.0" y="250" text-anchor="middle">80</text>
+<line x1="558.7" y1="54" x2="558.7" y2="236" stroke="#ddd"/>
+<text x="558.7" y="250" text-anchor="middle">100</text>
+<line x1="636.5" y1="54" x2="636.5" y2="236" stroke="#ddd"/>
+<text x="636.5" y="250" text-anchor="middle">120</text>
+<line x1="714.2" y1="54" x2="714.2" y2="236" stroke="#ddd"/>
+<text x="714.2" y="250" text-anchor="middle">140</text>
+<line x1="792.0" y1="54" x2="792.0" y2="236" stroke="#ddd"/>
+<text x="792.0" y="250" text-anchor="middle">160</text>
+<line x1="869.7" y1="54" x2="869.7" y2="236" stroke="#ddd"/>
+<text x="869.7" y="250" text-anchor="middle">180</text>
+<line x1="947.5" y1="54" x2="947.5" y2="236" stroke="#ddd"/>
+<text x="947.5" y="250" text-anchor="middle">200</text>
+<text x="560.0" y="268" text-anchor="middle">time (ticks)</text>
+<text x="8" y="76"> 17 schedtrace</text>
+<text x="958" y="76">  1 runs, avg 0.0</text>
+<text x="8" y="100"> 18 schedbench</text>
+<rect x="172.33" y="88" width="0.60" height="16" fill="#4e79a7"/>
+<rect x="180.11" y="88" width="11.66" height="16" fill="#4e79a7"/>
+<rect x="222.91" y="88" width="7.74" height="16" fill="#4e79a7"/>
+<rect x="261.78" y="88" width="3.85" height="16" fill="#4e79a7"/>
+<rect x="281.22" y="88" width="3.85" height="16" fill="#4e79a7"/>
+<rect x="296.77" y="88" width="1.24" height="16" fill="#4e79a7"/>
+<rect x="547.11" y="88" width="0.60" height="16" fill="#4e79a7"/>
+<rect x="589.87" y="88" width="0.60" height="16" fill="#4e79a7"/>
+<rect x="636.56" y="88" width="0.60" height="16" fill="#4e79a7"/>
+<rect x="923.64" y="88" width="26.36" height="16" fill="#4e79a7"/>
+<text x="958" y="100"> 12 runs, avg 1.2</text>
+<text x="8" y="124"> 19 schedbench</text>
+<rect x="191.81" y="112" width="7.74" height="16" fill="#4e79a7"/>
+<rect x="207.36" y="112" width="7.74" height="16" fill="#4e79a7"/>
+<rect x="238.46" y="112" width="7.74" height="16" fill="#4e79a7"/>
+<rect x="269.56" y="112" width="3.85" height="16" fill="#4e79a7"/>
+<rect x="285.10" y="112" width="3.85" height="16" fill="#4e79a7"/>
+<rect x="308.43" y="112" width="3.85" height="16" fill="#4e79a7"/>
+<rect x="327.87" y="112" width="3.85" height="16" fill="#4e79a7"/>
+<rect x="347.30" y="112" width="3.85" height="16" fill="#4e79a7"/>
+<rect x="366.74" y="112" width="3.85" height="16" fill="#4e79a7"/>
+<rect x="386.18" y="112" width="3.85" height="16" fill="#4e79a7"/>
+<rect x="405.61" y="112" width="3.85" height="16" fill="#4e79a7"/>
+<rect x="425.05" y="112" width="3.85" height="16" fill="#4e79a7"/>
+<rect x="444.49" y="112" width="3.85" height="16" fill="#4e79a7"/>
+<rect x="463.92" y="112" width="3.85" height="16" fill="#4e79a7"/>
+<rect x="483.36" y="112" width="3.85" height="16" fill="#4e79a7"/>
+<rect x="502.80" y="112" width="3.85" height="16" fill="#4e79a7"/>
+<rect x="522.23" y="112" width="3.85" height="16" fill="#4e79a7"/>
+<rect x="541.67" y="112" width="3.85" height="16" fill="#4e79a7"/>
+<rect x="568.88" y="112" width="7.74" height="16" fill="#4e79a7"/>
+<rect x="596.09" y="112" width="7.74" height="16" fill="#4e79a7"/>
+<rect x="623.66" y="112" width="11.55" height="16" fill="#4e79a7"/>
+<rect x="637.07" y="112" width="286.58" height="16" fill="#4e79a7"/>
+<text x="958" y="124"> 22 runs, avg 4.6</text>
+<text x="8" y="148"> 20 schedbench</text>
+<rect x="199.58" y="136" width="7.74" height="16" fill="#4e79a7"/>
+<rect x="215.13" y="136" width="7.74" height="16" fill="#4e79a7"/>
+<rect x="246.23" y="136" width="7.74" height="16" fill="#4e79a7"/>
+<rect x="273.44" y="136" width="3.85" height="16" fill="#4e79a7"/>
+<rect x="288.99" y="136" width="3.85" height="16" fill="#4e79a7"/>
+<rect x="312.32" y="136" width="3.85" height="16" fill="#4e79a7"/>
+<rect x="331.75" y="136" width="3.85" height="16" fill="#4e79a7"/>
+<rect x="351.19" y="136" width="3.85" height="16" fill="#4e79a7"/>
+<rect x="370.63" y="136" width="3.85" height="16" fill="#4e79a7"/>
+<rect x="390.06" y="136" width="3.85" height="16" fill="#4e79a7"/>
+<rect x="409.50" y="136" width="3.85" height="16" fill="#4e79a7"/>
+<rect x="428.94" y="136" width="3.85" height="16" fill="#4e79a7"/>
+<rect x="448.37" y="136" width="3.85" height="16" fill="#4e79a7"/>
+<rect x="467.81" y="136" width="3.85" height="16" fill="#4e79a7"/>
+<rect x="487.25" y="136" width="3.85" height="16" fill="#4e79a7"/>
+<rect x="506.68" y="136" width="3.85" height="16" fill="#4e79a7"/>
+<rect x="526.12" y="136" width="3.85" height="16" fill="#4e79a7"/>
+<rect x="545.56" y="136" width="1.55" height="16" fill="#4e79a7"/>
+<text x="958" y="148"> 18 runs, avg 1.1</text>
+<text x="8" y="172"> 21 schedbench</text>
+<rect x="230.68" y="160" width="7.74" height="16" fill="#4e79a7"/>
+<rect x="254.01" y="160" width="7.74" height="16" fill="#4e79a7"/>
+<rect x="300.65" y="160" width="3.85" height="16" fill="#4e79a7"/>
+<rect x="320.09" y="160" width="3.85" height="16" fill="#4e79a7"/>
+<rect x="339.53" y="160" width="3.85" height="16" fill="#4e79a7"/>
+<rect x="358.96" y="160" width="3.85" height="16" fill="#4e79a7"/>
+<rect x="378.40" y="160" width="3.85" height="16" fill="#4e79a7"/>
+<rect x="397.84" y="160" width="3.85" height="16" fill="#4e79a7"/>
+<rect x="417.28" y="160" width="3.85" height="16" fill="#4e79a7"/>
+<rect x="436.71" y="160" width="3.85" height="16" fill="#4e79a7"/>
+<rect x="456.15" y="160" width="3.85" height="16" fill="#4e79a7"/>
+<rect x="475.59" y="160" width="3.85" height="16" fill="#4e79a7"/>
+<rect x="495.02" y="160" width="3.85" height="16" fill="#4e79a7"/>
+<rect x="514.46" y="160" width="3.85" height="16" fill="#4e79a7"/>
+<rect x="533.90" y="160" width="3.85" height="16" fill="#4e79a7"/>
+<rect x="553.33" y="160" width="7.74" height="16" fill="#4e79a7"/>
+<rect x="584.43" y="160" width="5.44" height="16" fill="#4e79a7"/>
+<text x="958" y="172"> 17 runs, avg 1.2</text>
+<text x="8" y="196"> 22 schedbench</text>
+<rect x="265.67" y="184" width="3.85" height="16" fill="#4e79a7"/>
+<rect x="277.33" y="184" width="3.85" height="16" fill="#4e79a7"/>
+<rect x="292.88" y="184" width="3.85" height="16" fill="#4e79a7"/>
+<rect x="316.20" y="184" width="3.85" height="16" fill="#4e79a7"/>
+<rect x="335.64" y="184" width="3.85" height="16" fill="#4e79a7"/>
+<rect x="355.08" y="184" width="3.85" height="16" fill="#4e79a7"/>
+<rect x="374.51" y="184" width="3.85" height="16" fill="#4e79a7"/>
+<rect x="393.95" y="184" width="3.85" height="16" fill="#4e79a7"/>
+<rect x="413.39" y="184" width="3.85" height="16" fill="#4e79a7"/>
+<rect x="432.82" y="184" width="3.85" height="16" fill="#4e79a7"/>
+<rect x="452.26" y="184" width="3.85" height="16" fill="#4e79a7"/>
+<rect x="471.70" y="184" width="3.85" height="16" fill="#4e79a7"/>
+<rect x="491.14" y="184" width="3.85" height="16" fill="#4e79a7"/>
+<rect x="510.57" y="184" width="3.85" height="16" fill="#4e79a7"/>
+<rect x="530.01" y="184" width="3.85" height="16" fill="#4e79a7"/>
+<rect x="547.62" y="184" width="5.68" height="16" fill="#4e79a7"/>
+<rect x="576.66" y="184" width="7.74" height="16" fill="#4e79a7"/>
+<rect x="603.87" y="184" width="7.50" height="16" fill="#4e79a7"/>
+<text x="958" y="196"> 18 runs, avg 1.1</text>
+<text x="8" y="220"> 23 schedbench</text>
+<rect x="298.05" y="208" width="2.57" height="16" fill="#4e79a7"/>
+<rect x="304.54" y="208" width="3.85" height="16" fill="#4e79a7"/>
+<rect x="323.98" y="208" width="3.85" height="16" fill="#4e79a7"/>
+<rect x="343.42" y="208" width="3.85" height="16" fill="#4e79a7"/>
+<rect x="362.85" y="208" width="3.85" height="16" fill="#4e79a7"/>
+<rect x="382.29" y="208" width="3.85" height="16" fill="#4e79a7"/>
+<rect x="401.73" y="208" width="3.85" height="16" fill="#4e79a7"/>
+<rect x="421.16" y="208" width="3.85" height="16" fill="#4e79a7"/>
+<rect x="440.60" y="208" width="3.85" height="16" fill="#4e79a7"/>
+<rect x="460.04" y="208" width="3.85" height="16" fill="#4e79a7"/>
+<rect x="479.47" y="208" width="3.85" height="16" fill="#4e79a7"/>
+<rect x="498.91" y="208" width="3.85" height="16" fill="#4e79a7"/>
+<rect x="518.35" y="208" width="3.85" height="16" fill="#4e79a7"/>
+<rect x="537.78" y="208" width="3.85" height="16" fill="#4e79a7"/>
+<rect x="561.11" y="208" width="7.74" height="16" fill="#4e79a7"/>
+<rect x="590.38" y="208" width="5.68" height="16" fill="#4e79a7"/>
+<rect x="608.03" y="208" width="15.63" height="16" fill="#4e79a7"/>
+<rect x="635.20" y="208" width="1.36" height="16" fill="#4e79a7"/>
+<text x="958" y="220"> 18 runs, avg 1.2</text>
+<line x1="170.0" y1="46" x2="170.0" y2="236" stroke="black" stroke-dasharray="4,3"/>
+<text x="173.0" y="44">RR</text>
+<line x1="172.7" y1="46" x2="172.7" y2="236" stroke="black" stroke-dasharray="4,3"/>
+<text x="175.7" y="44">CFS</text>
+<line x1="950.0" y1="46" x2="950.0" y2="236" stroke="black" stroke-dasharray="4,3"/>
+<text x="953.0" y="44">RR</text>
+<rect x="170" y="32" width="12" height="12" fill="#4e79a7"/>
+<text x="186" y="43">cpu0</text>
+</svg>

@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="278" font-family="monospace" font-size="12">
+<rect width="1100" height="278" fill="white"/>
+<text x="170" y="22" font-size="15" font-weight="bold">FIFO: one 100-tick job, then four 20-tick jobs (1 CPU)</text>
+<line x1="170.0" y1="54" x2="170.0" y2="236" stroke="#ddd"/>
+<text x="170.0" y="250" text-anchor="middle">0</text>
+<line x1="247.8" y1="54" x2="247.8" y2="236" stroke="#ddd"/>
+<text x="247.8" y="250" text-anchor="middle">20</text>
+<line x1="325.6" y1="54" x2="325.6" y2="236" stroke="#ddd"/>
+<text x="325.6" y="250" text-anchor="middle">40</text>
+<line x1="403.4" y1="54" x2="403.4" y2="236" stroke="#ddd"/>
+<text x="403.4" y="250" text-anchor="middle">60</text>
+<line x1="481.2" y1="54" x2="481.2" y2="236" stroke="#ddd"/>
+<text x="481.2" y="250" text-anchor="middle">80</text>
+<line x1="558.9" y1="54" x2="558.9" y2="236" stroke="#ddd"/>
+<text x="558.9" y="250" text-anchor="middle">100</text>
+<line x1="636.7" y1="54" x2="636.7" y2="236" stroke="#ddd"/>
+<text x="636.7" y="250" text-anchor="middle">120</text>
+<line x1="714.5" y1="54" x2="714.5" y2="236" stroke="#ddd"/>
+<text x="714.5" y="250" text-anchor="middle">140</text>
+<line x1="792.3" y1="54" x2="792.3" y2="236" stroke="#ddd"/>
+<text x="792.3" y="250" text-anchor="middle">160</text>
+<line x1="870.1" y1="54" x2="870.1" y2="236" stroke="#ddd"/>
+<text x="870.1" y="250" text-anchor="middle">180</text>
+<line x1="947.9" y1="54" x2="947.9" y2="236" stroke="#ddd"/>
+<text x="947.9" y="250" text-anchor="middle">200</text>
+<text x="560.0" y="268" text-anchor="middle">time (ticks)</text>
+<text x="8" y="76"> 10 schedtrace</text>
+<text x="958" y="76">  1 runs, avg 0.0</text>
+<text x="8" y="100"> 11 schedbench</text>
+<rect x="172.33" y="88" width="0.60" height="16" fill="#4e79a7"/>
+<rect x="180.11" y="88" width="28.47" height="16" fill="#4e79a7"/>
+<rect x="920.95" y="88" width="29.02" height="16" fill="#4e79a7"/>
+<text x="958" y="100">  4 runs, avg 3.7</text>
+<text x="8" y="124"> 12 schedbench</text>
+<rect x="208.58" y="112" width="395.64" height="16" fill="#4e79a7"/>
+<text x="958" y="124">  1 runs, avg 101.7</text>
+<text x="8" y="148"> 13 schedbench</text>
+<rect x="604.22" y="136" width="79.19" height="16" fill="#4e79a7"/>
+<text x="958" y="148">  1 runs, avg 20.4</text>
+<text x="8" y="172"> 14 schedbench</text>
+<rect x="683.41" y="160" width="79.15" height="16" fill="#4e79a7"/>
+<text x="958" y="172">  1 runs, avg 20.4</text>
+<text x="8" y="196"> 15 schedbench</text>
+<rect x="762.57" y="184" width="79.19" height="16" fill="#4e79a7"/>
+<text x="958" y="196">  1 runs, avg 20.4</text>
+<text x="8" y="220"> 16 schedbench</text>
+<rect x="841.76" y="208" width="79.19" height="16" fill="#4e79a7"/>
+<text x="958" y="220">  1 runs, avg 20.4</text>
+<line x1="170.0" y1="46" x2="170.0" y2="236" stroke="black" stroke-dasharray="4,3"/>
+<text x="173.0" y="44">RR</text>
+<line x1="172.8" y1="46" x2="172.8" y2="236" stroke="black" stroke-dasharray="4,3"/>
+<text x="175.8" y="44">FIFO</text>
+<line x1="949.9" y1="46" x2="949.9" y2="236" stroke="black" stroke-dasharray="4,3"/>
+<text x="952.9" y="44">RR</text>
+<rect x="170" y="32" width="12" height="12" fill="#4e79a7"/>
+<text x="186" y="43">cpu0</text>
+</svg>

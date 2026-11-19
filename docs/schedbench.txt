@@ -1,0 +1,91 @@
+schedbench
+schedbench: 210526 loop iterations per tick
+
+=== workload: cpu (5 processes) ===
+-- RR --
+  job  kind  amount  turnaround   waiting  response   cpu time
+  0    cpu     100       191      87       2     102
+  1    cpu      20        98      76       4      20
+  2    cpu      20       104      78       9      20
+  3    cpu      20       104      79       8      20
+  4    cpu      20       102      72      14      20
+-- FIFO --
+  job  kind  amount  turnaround   waiting  response   cpu time
+  0    cpu     100       109       6       7     102
+  1    cpu      20       128     107     108      20
+  2    cpu      20       147     125     127      20
+  3    cpu      20       166     144     145      20
+  4    cpu      20       185     163     165      20
+-- CFS --
+  job  kind  amount  turnaround   waiting  response   cpu time
+  0    cpu     100       191      88       3     102
+  1    cpu      20        93      72       4      20
+  2    cpu      20       103      73      11      20
+  3    cpu      20        98      69      10      20
+  4    cpu      20        96      66       9      20
+
+summary (cpu), averages in ticks:
+  sched   turnaround   waiting  response  makespan
+  RR         119.8      78.4       7.4     191
+  FIFO       147.0     109.0     110.4     190
+  CFS        116.2      73.6       7.4     191
+
+=== workload: io (4 processes) ===
+-- RR --
+  job  kind  amount  turnaround   waiting  response   cpu time
+  0    io       15        32       1       2       4
+  1    io       15        33       1       3       4
+  2    io       15        33       1       3       4
+  3    io       15        32       0       2       4
+-- FIFO --
+  job  kind  amount  turnaround   waiting  response   cpu time
+  0    io       15        36       4       5       4
+  1    io       15        35       4       5       4
+  2    io       15        34       2       4       4
+  3    io       15        33       1       2       4
+-- CFS --
+  job  kind  amount  turnaround   waiting  response   cpu time
+  0    io       15        33       4       3       4
+  1    io       15        32       3       2       4
+  2    io       15        33       2       3       4
+  3    io       15        34       0       3       4
+
+summary (io), averages in ticks:
+  sched   turnaround   waiting  response  makespan
+  RR          32.5       0.7       2.5      37
+  FIFO        34.5       2.7       4.0      37
+  CFS         33.0       2.2       2.7      38
+
+=== workload: mix (4 processes) ===
+-- RR --
+  job  kind  amount  turnaround   waiting  response   cpu time
+  0    cpu      60       136      66       2      61
+  1    cpu      60       129      66       4      61
+  2    io       15        40      19       9       4
+  3    io       15        38      17       8       4
+-- FIFO --
+  job  kind  amount  turnaround   waiting  response   cpu time
+  0    cpu      60        66       4       5      61
+  1    cpu      60       126      64      65      61
+  2    io       15       156     123     125       4
+  3    io       15       154     123     124       4
+-- CFS --
+  job  kind  amount  turnaround   waiting  response   cpu time
+  0    cpu      60       134      69       3      61
+  1    cpu      60       135      69       4      61
+  2    io       15        42      16      11       4
+  3    io       15        36      15       6       4
+
+summary (mix), averages in ticks:
+  sched   turnaround   waiting  response  makespan
+  RR          85.7      42.0       5.7     136
+  FIFO       125.5      78.5      79.7     158
+  CFS         86.7      42.2       6.0     136
+
+=== nice: CPU share under CFS, 300 ticks ===
+  nice  weight  run ticks   share  expected
+   -5   3121      206   69.5%    69.6%
+    0   1024       68   22.9%    22.8%
+    5    335       22    7.4%     7.4%
+  (shares match weights exactly only on one CPU)
+$ 

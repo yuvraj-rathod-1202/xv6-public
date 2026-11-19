@@ -1,16 +1,19 @@
 # Pluggable Schedulers for xv6: RR, FIFO and CFS
 
 This fork of xv6 (x86) replaces the fixed round-robin scheduler with three
-schedulers that can be switched **at runtime, without rebooting**:
+**scheduling classes** that can be switched **at runtime, without rebooting**:
 
-| Scheduler | `schedctl` name | Preemptive | Picks next | Cost per pick |
+| Scheduler | `schedctl` | Preemption | Picks next | Run-queue cost |
 |---|---|---|---|---|
-| Round Robin | `rr` | yes, every tick | next RUNNABLE slot after the last one picked | O(NPROC) |
-| FIFO | `fcfs` | **no** | the process that became RUNNABLE earliest | O(NPROC) |
-| Completely Fair Scheduler | `cfs` | yes, every tick | smallest virtual runtime (leftmost red-black tree node) | O(log n) |
+| Round Robin | `rr` | every tick (1-tick quantum) | head of a FIFO list | O(1) |
+| FIFO | `fcfs` / `fifo` | **none** (runs until it blocks or exits) | process that became ready first | O(1) |
+| Completely Fair Scheduler | `cfs` | when its time slice is used up | smallest virtual runtime (leftmost red-black-tree node) | O(log n) |
 
-CFS supports **nice values** (-20 to 19) using the Linux weight table, so a
-process's share of the CPU is proportional to its weight.
+CFS supports **nice values** (−20..19) with the Linux weight table, and
+time slices derived from the **`sched_latency`** and **`min_granularity`**
+tunables. Everything is verified by an automated test suite (unit, mutation,
+in-kernel invariant checking, randomised stress, xv6's own usertests) that
+runs with one command and in GitHub Actions.
 
 The system boots with RR, so stock xv6 behaviour is unchanged until you switch.
 
@@ -19,403 +22,445 @@ The system boots with RR, so stock xv6 behaviour is unchanged until you switch.
 ## 1. Quick start
 
 ```sh
-make qemu-nox                     # 2 CPUs (default)
-make qemu-nox CPUS=1              # 1 CPU: scheduling effects are easiest to see
-```
+make qemu-nox                 # boot xv6 (2 CPUs)
+make qemu-nox CPUS=1          # 1 CPU: scheduling effects are easiest to see
+make qemu-bench CPUS=1        # deterministic clock, for benchmarks (§7.1)
 
-For **benchmarks**, also make guest time deterministic (see section 6.1):
-
-```sh
-make qemu-nox CPUS=1 QEMUEXTRA="-icount shift=3,sleep=off"
+make test                     # quick automated suite (~1 min)
+make test-full                # everything incl. usertests + benchmarks (results/)
+make SCHED_DEBUG=1 qemu-nox   # kernel that checks scheduler invariants constantly
 ```
 
 Inside xv6:
 
 ```
-$ schedctl get              # show the active scheduler
-rr
-$ schedctl cfs              # switch to CFS (also: rr, fcfs)
-Scheduler set to cfs
-$ nice 5 ps                 # run a command at nice 5
-$ renice -3 7               # change the nice value of pid 7
-$ ps                        # processes with nice, vruntime, run/wait/sleep time
-$ schedtest                 # correctness tests (expects: ALL TESTS PASSED)
-$ schedbench                # compare RR / FIFO / CFS on several workloads
-$ schedbench nice           # CPU share vs nice value under CFS
+$ schedctl get                    # active scheduler and CFS tunables
+$ schedctl cfs                    # switch (rr | fcfs | fifo | cfs)
+$ schedctl tune 12 2              # CFS sched_latency = 12, min_granularity = 2 ticks
+$ nice 5 ps                       # run a command at nice 5
+$ renice -3 7                     # change the nice value of pid 7
+$ ps                              # per-process state, nice, vruntime, CPU/wait/sleep time
+$ schedtrace schedbench cpu fifo  # run a workload and draw a Gantt chart of it
+$ schedbench                      # compare RR / FIFO / CFS on several workloads
+$ schedoverhead                   # cost of each scheduling decision vs. #processes
+$ schedtest                       # 7 correctness tests  -> ALL TESTS PASSED
+$ schedstress 1000                # randomised stress test -> PASS
 ```
 
 ### User programs
 
 | Program | Purpose |
 |---|---|
-| `schedctl get\|rr\|fcfs\|cfs` | Show or change the active scheduler. |
-| `nice <n> <cmd> [args]` | Run `cmd` at nice `n`. The value survives `exec` and is inherited by children. |
+| `schedctl get\|rr\|fcfs\|fifo\|cfs\|tune L G` | Show/switch the scheduler; set CFS tunables. |
+| `nice <n> <cmd> [args]` | Run `cmd` at nice `n` (survives `exec`, inherited by children). |
 | `renice <n> <pid>...` | Change the nice value of running processes. |
-| `ps` | Show the scheduler and, per process: PID, PPID, state, nice, vruntime, CPU / wait / sleep ticks, name. |
-| `schedbench [cpu\|io\|mix\|nice\|all]` | Run workloads under each scheduler and report turnaround, waiting and response time. |
-| `schedtest` | Automated tests for runtime switching, CFS fairness, FIFO order and nice handling. |
+| `ps` | PID, PPID, state, nice, vruntime, CPU / wait / sleep ticks, name. |
+| `schedtrace [-c] <cmd>` | Trace every dispatch/preemption while `cmd` runs; print an ASCII Gantt chart (or CSV for `tools/gantt.py`). |
+| `schedbench [cpu\|io\|mix\|nice\|all] [rr\|fifo\|cfs]` | Turnaround / waiting / response time of fixed workloads under each scheduler; CPU share vs. nice. |
+| `schedoverhead [maxN]` | Cycles per pick / enqueue for N = 1…240 runnable processes, vs. a linear scan. |
+| `schedtest` | Correctness tests (§6.4). |
+| `schedstress [ticks] [seed]` | Randomised stress test (§6.5). |
 
 ### System calls
 
 | # | Call | Description |
 |---|---|---|
-| 22 | `int setscheduler(int s)` | `SCHED_RR`=0, `SCHED_FCFS`=1, `SCHED_CFS`=2. Returns -1 if `s` is invalid. |
-| 23 | `int getscheduler(void)` | Returns the active scheduler. |
-| 24 | `int setnice(int n)` | Set the caller's nice value (-20..19). |
-| 25 | `int getnice(void)` | Return the caller's nice value. |
-| 26 | `int getpinfo(struct pinfo *buf, int max)` | Copy up to `max` process records; returns the count. |
-| 27 | `int waitx(struct waitinfo *wi)` | Like `wait()`, and also fills in the child's timing statistics. |
-| 28 | `int renice(int pid, int n)` | Set another process's nice value. |
+| 22 | `setscheduler(int s)` | `SCHED_RR`=0, `SCHED_FCFS`=1, `SCHED_CFS`=2. |
+| 23 | `getscheduler()` | Active scheduler. |
+| 24 | `setnice(int n)` / 25 `getnice()` | Caller's nice value (−20..19). |
+| 26 | `getpinfo(struct pinfo *buf, int max)` | Snapshot of up to `max` processes. |
+| 27 | `waitx(struct waitinfo *wi)` | `wait()` plus the child's timing statistics. |
+| 28 | `renice(int pid, int n)` | Another process's nice value. |
+| 29 | `schedtune(int latency, int min_gran)` | CFS tunables in ticks (0 = unchanged); needs 1 ≤ min_gran ≤ latency ≤ 1000. |
+| 30 | `schedstat(int cmd, struct schedstat *st)` | Read / reset scheduler counters; enable the CFS linear-scan cross-check. |
+| 31 | `tracectl(int cmd)` | Start / stop / restart the scheduling trace. |
+| 32 | `traceread(struct trace_event *buf, int start, int n)` | Copy trace events out. |
 
-`struct pinfo`, `struct waitinfo` and the `SCHED_*` and `NICE_*` constants are in
-**`sched.h`**, which is shared by the kernel and user programs.
+Shared constants and structures are in **`sched.h`** (used by kernel and user programs).
 
 ---
 
 ## 2. Architecture
 
-### 2.1 One run queue that all three policies read
-
-Switching scheduler must not lose, duplicate or strand a process. So every
-RUNNABLE process is kept in **every** scheduler's data structure all the time,
-whichever scheduler is active:
-
-* it is a node in the CFS **red-black tree** (`ptable.cfs_root`), and
-* it has a **FIFO sequence number** (`p->fifo_seq`), stamped when it became
-  RUNNABLE.
-
-RR needs no extra structure; it scans `ptable` from a rotating cursor.
-
-Every transition into RUNNABLE goes through two helpers in `proc.c`:
-
-| Helper | Used by | Effect |
-|---|---|---|
-| `make_runnable(p)` | `userinit`, `fork`, `wakeup1`, `kill` | lifts `vruntime` to `min_vruntime`, sets RUNNABLE, calls `runqueue_add` |
-| `runqueue_add(p)` | `sched()` on yield, `make_runnable` | stamps `fifo_seq`, inserts into the tree |
-
-When `scheduler()` dispatches a process it removes it from the tree
-(`rb_delete`). So the invariant is: **a process is in the tree if and only if it
-is RUNNABLE.** `rb_insert` and `rb_delete` panic if this is ever violated.
-
-### 2.2 Choosing and dispatching
-
 ```
-scheduler():                                   (each CPU, forever)
-  acquire(ptable.lock)
-  p = select_process()        -> scheduler_RR / scheduler_FCFS / scheduler_CFS
-  if p:
-      rb_delete(p); p->state = RUNNING
-      p->run_start = rdtsc(); p->cfs_accounting = (current_scheduler == CFS)
-      swtch(...)              -> p runs until it yields, sleeps or exits
-  release(ptable.lock)
-
-sched():                                       (p is giving up the CPU)
-  elapsed = rdtsc() - p->run_start;  p->exec_time += elapsed
-  if p->cfs_accounting:  p->vruntime += elapsed * 1024 / weight(nice)
-  if p is RUNNABLE (preempted): runqueue_add(p)
-  if CFS: advance min_vruntime
+            trap.c (timer)          proc.c (fork, sleep, wakeup, kill, exit, scheduler loop)
+                 |                                   |
+                 v                                   v
+        +--------------------------- sched.c (core) ---------------------------+
+        |  sched_wakeup  sched_pick  sched_start  sched_stop  sched_tick         |
+        |  sched_set_policy (migration)   CPU-time accounting (TSC)              |
+        |  statistics   trace buffer   tunables   SCHED_DEBUG invariant checks   |
+        +-----------------------------------+-----------------------------------+
+                                            | struct sched_class hooks
+                 +--------------------------+--------------------------+
+                 v                          v                          v
+          sched_rr.c: RR            sched_rr.c: FIFO           sched_cfs.c: CFS
+          doubly linked list        doubly linked list         red-black tree (rbtree.c)
 ```
 
-`current_scheduler` is read under `ptable.lock`, so a switch takes effect at the
-next scheduling decision on every CPU. A process that is already running is
-never interrupted by a switch.
+### 2.1 Scheduling classes
+
+Each policy implements `struct sched_class` (`sched_class.h`), modelled on
+Linux's `kernel/sched/`:
+
+| Hook | Called when |
+|---|---|
+| `enqueue(p, wakeup)` | `p` became RUNNABLE (`wakeup`=1: new / woken / migrated; 0: preempted) |
+| `dequeue(p)` | remove a queued `p` |
+| `pick_next()` | choose and remove the next process (or 0) |
+| `set_curr(p)` | `p` is about to run |
+| `put_prev(p, cycles)` | `p` stopped after running `cycles` (state tells why) |
+| `tick(p)` | timer tick while `p` runs; return 1 to preempt |
+| `switched_to()` | this class just became active |
+| `check()` | (debug) verify the queue's internal structure |
+
+The core never looks inside a run queue, so the three policies are
+independent files, and adding a fourth means one new file and one line in
+the class table in `sched.c`.
+
+### 2.2 Life of a process, from the scheduler's point of view
+
+```
+fork / wakeup / kill ──> make_runnable ──> sched_wakeup ──> class->enqueue(p, 1)
+scheduler loop:  p = sched_pick() ──> class->pick_next()       (p leaves the queue)
+                 p->state = RUNNING;  sched_start(p) ──> class->set_curr(p)
+timer tick:      preempt_tick() ──> sched_tick(p) ──> class->tick(p) ? yield()
+yield/sleep/exit: sched() ──> sched_stop(p): exec_time += cycles;
+                                class->put_prev(p, cycles);
+                                if RUNNABLE: class->enqueue(p, 0)
+```
 
 ### 2.3 Switching at runtime
 
-`setscheduler(s)` → `set_scheduler()` (`proc.c`), under `ptable.lock`:
+`setscheduler(s)` → `sched_set_policy(s)` under `ptable.lock`:
 
-1. Validate `s`.
-2. If switching **into CFS from another scheduler**, call `cfs_reset_vruntime()`
-   (section 3.3).
-3. Set `current_scheduler = s`.
+1. make the new class current and call its `switched_to()`;
+2. **migrate**: repeatedly `old->pick_next()` and `new->enqueue(p, 1)` until the
+   old queue is empty — every queued process moves exactly once, in the old
+   class's priority order;
+3. processes that are *running* at that moment finish their current run and
+   are handed to the new class by `sched_stop()` when they stop.
 
-Preemption is decided in `trap.c`: on a timer tick the running process yields
-unless the active scheduler is FIFO.
+### 2.4 Locking and invariants
+
+`ptable.lock` protects all scheduler state (run queues, counters, trace).
+The core maintains, and a `SCHED_DEBUG` kernel **verifies after every
+run-queue operation**:
+
+* `p->on_rq == 1` ⇔ `p->state == RUNNABLE` ⇔ `p` is in the active class's queue;
+* the number of queued processes equals the class's own count;
+* the class structure is intact — list links/length for RR and FIFO; for CFS
+  every red-black property (`rb_verify`), the cached queued load, and the
+  running-process load used for time slices;
+* every CFS pick equals the minimum found by a linear scan of the process table.
+
+Any violation panics with a description of what is wrong.
 
 ---
 
-## 3. The schedulers
+## 3. The policies
 
-### 3.1 Round Robin
+### 3.1 Round Robin (`sched_rr.c`)
+A doubly linked queue: enqueue at the tail, pick from the head (O(1)). The
+timer preempts every tick, and the preempted process goes to the tail, so
+every runnable process gets one 1-tick quantum per round.
 
-`scheduler_RR()` scans `ptable` circularly starting at `rr_next` and picks the
-first RUNNABLE process; `rr_next` is then set to the slot after it. Each process
-runs for at most one timer tick (the time slice) before `trap()` preempts it.
+### 3.2 FIFO (`sched_rr.c`)
+The same queue, but `tick()` never preempts: a process runs until it blocks
+or exits ("first ready, first run", like Linux `SCHED_FIFO` within one
+priority). A process that wakes up joins the tail.
 
-> Keeping the cursor matters. The original version restarted the scan at slot
-> 0 on every decision, so processes in low slots starved those in higher slots.
+### 3.3 CFS (`sched_cfs.c`)
 
-### 3.2 FIFO (first ready, first run)
+**Virtual runtime.** `vruntime += cycles_run × 1024 / weight(nice)`; the
+process with the smallest `vruntime` runs next, so CPU share is proportional
+to weight. Weights are Linux's `sched_prio_to_weight` (nice 0 = 1024, each
+step ≈ ×1.25; −5 → 3121, +5 → 335).
 
-* **Order:** `scheduler_FCFS()` picks the RUNNABLE process with the smallest
-  `fifo_seq`. `fifo_seq` is a 64-bit counter stamped each time a process joins
-  the run queue (fork, wakeup, kill, preemption). Ties are impossible, and reused
-  `ptable` slots don't affect the order.
-* **Non-preemptive:** the timer does not force a yield while FIFO is active, so a
-  process runs until it blocks or exits.
-* **Blocking:** a process that sleeps goes to the **back** of the queue when it
-  wakes, like Linux `SCHED_FIFO`.
+**Red-black tree.** RUNNABLE processes are kept in a generic intrusive
+red-black tree (`rbtree.c`, CLRS) keyed by (`vruntime`, `pid`); the next
+process is the leftmost node. Insert/erase are O(log n). The same `rbtree.c`
+is compiled on the host for unit and mutation testing (§6.1).
 
-> The original version ordered by creation time in ticks. Processes created in
-> the same tick were therefore ordered by slot index, and the timer still
-> preempted the running process every tick (only to pick it again).
-
-### 3.3 Completely Fair Scheduler
-
-**Virtual runtime.** Each process has `vruntime`, its CPU time scaled by its
-weight:
+**Time slices.** With `nr` = processes queued or running under CFS and
+`W` = their total weight:
 
 ```
-vruntime += cycles_run × NICE_0_LOAD / weight(nice)          NICE_0_LOAD = 1024
+period   = sched_latency                      if nr × min_granularity ≤ sched_latency
+         = nr × min_granularity               otherwise
+slice(p) = max( period × weight(p) / W , min_granularity )      (rounded, in ticks)
 ```
 
-The scheduler always runs the process with the **smallest** `vruntime`. A
-process with twice the weight accumulates `vruntime` half as fast, so it gets
-twice the CPU.
+`tick(p)` counts the ticks of the current run and preempts once it reaches
+`slice(p)` — but only if another process is waiting. Defaults:
+`sched_latency` = 6 ticks, `min_granularity` = 1 tick; change them with
+`schedctl tune`. Because the timer tick is the only preemption point, slices
+are whole ticks.
 
-**Weights.** These are the Linux `sched_prio_to_weight` table (nice 0 = 1024,
-each nice step ≈ ×1.25):
+**Exact CPU-time accounting.** Run time is measured with the time-stamp
+counter (`rdtsc`), not ticks: with ticks, a process that always blocked just
+before a tick would never be charged. The charge uses 32-bit fixed point
+(`(cycles × ((1024 << 16) / weight)) >> 16`) because the kernel has no libgcc
+for 64-bit division.
 
-```
-nice  -20: 88761   -10: 9548   -5: 3121   0: 1024   5: 335   10: 110   19: 15
-```
+**Placement.** `min_vruntime` is a monotonic floor (the smallest `vruntime`
+in the tree or of the process just charged). A process that wakes up, is
+forked, or is migrated in is lifted to at least `min_vruntime`, so a long
+sleeper cannot come back with a tiny `vruntime` and monopolise the CPU.
 
-**Red-black tree.** RUNNABLE processes are kept in a red-black tree embedded in
-`struct proc` (`rb_left`, `rb_right`, `rb_parent`, `rb_color`). It is ordered by
-(`vruntime`, `pid`); `pid` breaks ties so the order is total. Picking the next
-process means taking the leftmost node; insert and delete are O(log n) and
-rebalance as in CLRS. A process's key never changes while it is in the tree:
-`vruntime` only changes while it is RUNNING, SLEEPING or being created.
-
-**Measuring run time in CPU cycles.** Run time is read from the time-stamp
-counter (`rdtsc`, `x86.h`), not timer ticks. With ticks, a process that blocked
-before the next tick was charged nothing. A process that always slept just
-before a tick boundary could therefore run for free and take more than its
-share. A process starts and stops a run on the same CPU, so differences between
-CPUs' counters cancel out.
-
-**Fixed-point arithmetic.** The xv6 kernel is not linked with libgcc, so a
-64-bit `/` fails to link (`__udivdi3`). The charge is computed instead as:
-
-```
-factor    = (1024 << 16) / weight           // 32-bit division, done once
-vruntime += (cycles * factor) >> 16         // 64-bit multiply and shift are inline
-```
-
-At nice 0 one cycle adds exactly 1. Even at nice −20 the factor (756) keeps
-three significant digits. (The original code divided `1 tick × 1024 / weight`
-in integers, which is 0 for every negative nice value. Those processes' vruntime
-never grew, so they starved everyone else.)
-
-**`min_vruntime` and placement.** `ptable.min_vruntime` is a floor that never
-decreases. After each charge it is advanced to the leftmost `vruntime` in the
-tree (O(log n)). When a process wakes, is killed while asleep, or is forked, its
-`vruntime` is raised to at least `min_vruntime` (`make_runnable`). Without this,
-a process that slept for a long time would return with a very small `vruntime`
-and hold the CPU until it caught up. A forked child starts at
-`max(parent's vruntime, min_vruntime)`.
-
-**Normalizing on a switch into CFS.** While RR or FIFO is active, `vruntime`
-doesn't advance. Values left over from an earlier CFS period are then stale
-relative to each other: a process that slept through that period could come
-back far behind and take over the CPU. So when the system switches *into* CFS,
-`cfs_reset_vruntime()` removes every node from the tree, sets every
-`vruntime` (and `min_vruntime`) to 0, cancels any CFS charge still in progress,
-and reinserts the nodes. All processes start the new CFS period equal.
-`schedtest` test 2 reproduces this situation: with the reset and placement
-disabled, the late process took 99 of 100 ticks; with them, the split is 50/50.
+**Switching into CFS.** `vruntime` does not advance under RR/FIFO, so values
+from an earlier CFS period are stale relative to each other.
+`switched_to()` resets every process's `vruntime` and `min_vruntime` to 0
+and clears in-progress accounting before the queue is migrated in.
 
 ### 3.4 Nice values
-
-* Range −20 (most CPU) to 19 (least); default 0. Values outside the range are
-  rejected.
-* `setnice` changes the caller's value; `renice` changes another process's.
-  The value is inherited by `fork` and kept across `exec`, which is how the
-  `nice` command works.
-* Nice only affects CFS. RR and FIFO ignore it.
-* Changing nice doesn't move a process in the tree (the key is `vruntime`). The
-  new weight applies from its next charge.
+Range −20..19, default 0, inherited by `fork`, kept across `exec`. `setnice`
+changes the caller, `renice` any process. Only CFS uses nice; the new weight
+applies from the process's next charge / slice computation.
 
 ---
 
-## 4. Statistics
+## 4. Observability
 
-| Field | How it is measured |
-|---|---|
-| `ctime`, `etime`, `first_run` | the tick at creation, at exit, and at the first dispatch |
-| `rtime` (CPU time) | **exact:** TSC cycles accumulated in `sched()`, converted to ticks using the cycles-per-tick rate that CPU 0 measures on each timer interrupt |
-| `wtime` (waiting) | sampled each tick: +1 if RUNNABLE |
-| `stime` (sleeping) | sampled each tick: +1 if SLEEPING |
-
-`schedbench` derives:
-
-* **turnaround** = `etime − ctime`
-* **waiting** = `wtime`
-* **response** = `first_run − ctime`
-
-Sampling happens in `trap()` **before** `wakeup(&ticks)`. Otherwise every
-process in `sleep()` would have just been marked RUNNABLE when sampled and would
-count as waiting on every tick.
-
-`rtime` uses cycles rather than samples for the same reason as CFS: an I/O-bound
-process that runs for a quarter of a tick just after each tick is never
-RUNNING when a sample is taken, so sampling would report 0 CPU time.
+* **Per-process statistics** (`getpinfo`, `waitx`, `ps`): creation, first
+  run, exit (ticks); CPU time (exact, TSC cycles converted with the measured
+  cycles-per-tick rate); waiting and sleeping time (sampled each tick
+  *before* `wakeup(&ticks)`, otherwise every sleeper would count as waiting).
+* **Scheduler counters** (`schedstat`): dispatches, preemptions, enqueues,
+  cycles spent picking and enqueuing, queue length, CFS `nr_running`/load,
+  linear-scan cross-check count, cost and mismatches.
+* **Scheduling trace** (`tracectl`/`traceread`): an 8192-event kernel buffer
+  recording every dispatch (`RUN`), every stop (`STOP`: preempted / slept /
+  exited) and every scheduler switch, with CPU, pid, name and a timestamp in
+  1/100 tick. `schedtrace` draws it as an ASCII Gantt chart;
+  `tools/gantt.py` renders it as SVG (§7).
 
 ---
 
-## 5. Files
+## 5. Implementation notes
 
-| File | Change |
-|---|---|
-| `proc.c` | the three scheduler policies, `select_process`, red-black tree, run-queue helpers, CFS accounting, `min_vruntime`, vruntime reset on switch, `waitx`, `getpinfo`, `renice`, `update_times` |
-| `proc.h` | scheduling fields in `struct proc` |
-| `sched.h` *(new)* | shared constants and `struct pinfo` / `struct waitinfo` |
-| `trap.c` | no timer preemption under FIFO; per-tick statistics sampling |
-| `x86.h` | `rdtsc()` |
-| `sysproc.c`, `syscall.c`, `syscall.h`, `usys.S`, `user.h`, `defs.h` | system calls 22–28 |
-| `types.h` | `uint64` |
-| `schedctl.c`, `nice.c`, `renice.c`, `ps.c`, `schedbench.c`, `schedtest.c` *(new)* | user programs |
-| `sh.c` | `runcmd`/`panic` declared `noreturn`, so GCC ≥ 12 builds with `-Werror` |
-| `Makefile` | new programs; `-Werror -Wno-error=array-bounds` |
-| `param.h` | `FSSIZE` 1000 → 2000 blocks, so `usertests` still has room with the new programs |
+* **SMP on QEMU ≥ 8.** QEMU now puts all `-smp N` CPUs in one socket by
+  default and the BIOS MP table then lists only one, so stock xv6 boots a
+  single CPU. The Makefile and the test harness pass `-smp N,sockets=N`.
+* **`NPROC` is 256** (was 64), to measure scheduler cost with many processes.
+* **`FSSIZE` is 2000 blocks** (was 1000) so the extra programs still leave
+  `usertests` enough disk.
+* **xv6's `sleep(n)` wakes every sleeper on every tick** to recheck its
+  deadline. Such a process briefly joins the run queue each tick (and counts
+  towards CFS's `nr_running`); tests that measure slices therefore block in
+  `wait()` instead.
 
 ---
 
-## 6. Evaluation
+## 6. Testing
 
-### 6.1 Method
+| Layer | What | How to run |
+|---|---|---|
+| 6.1 Unit (host) | `rbtree.c` vs. a reference implementation: 1.8 M random insert / erase / pop-min / re-key operations, each followed by full verification; height bound; checker self-test | `make rbtree-test` |
+| 6.2 Mutation (host) | 12 deliberately broken copies of `rbtree.c` (missed recolour, missing fixup, broken rotation, wrong descent, disabled checks, …) — the unit test must fail every one | `make rbtree-mutation` |
+| 6.3 In-kernel invariants | `SCHED_DEBUG` kernel verifies §2.4 after every enqueue, dispatch, stop and switch, and cross-checks every CFS pick against a linear scan | `make SCHED_DEBUG=1 …` |
+| 6.4 Functional | `schedtest`: 7 tests (below) | `schedtest` |
+| 6.5 Stress | `schedstress`: randomised fork/exit/sleep/nice/kill and random scheduler switches and tunable changes, then checks nothing leaked or got lost | `schedstress [ticks] [seed]` |
+| 6.6 Regression | xv6's own `usertests` under RR and under CFS | `usertests` |
+| 6.7 Automation | `tools/xv6test.py` runs all of the above on 1, 2 and 4 CPUs (debug kernel), boots each run on a fresh disk image, detects panics and timeouts, and writes `results/summary.md` | `make test`, `make test-full` |
+| 6.8 CI | GitHub Actions runs `make test-full` on every push and uploads logs, benchmark output and Gantt charts | `.github/workflows/scheduler-tests.yml` |
 
-Under plain QEMU (TCG) the guest's speed varies with host load. The same
-CPU-bound job measured anywhere from 87 to 132 ticks across runs. QEMU's
-`-icount` option ties guest time to instructions executed, which makes
-measurements **reproducible**: two consecutive runs of the `cpu` workload with
-`-icount` produced identical numbers, and each job's measured CPU time matched
-its nominal length exactly. `shift=3` (one instruction = 8 ns of guest time)
-keeps the virtual CPU fast enough that kernel overheads such as `fork()` stay
-small compared with a tick. Hardware acceleration (`-enable-kvm`) is another option if your user
-can access `/dev/kvm`.
+`schedtest`:
 
-All results below were measured with
-`make qemu-nox CPUS=1 QEMUEXTRA="-icount shift=3,sleep=off"`. All times are in
-ticks.
+1. **switch** — 8 scheduler switches while 4 CPU-bound processes run; every switch takes effect, all processes finish; invalid ids rejected.
+2. **cfsfair** — a process that slept through a CFS period and woke under RR must not monopolise the CPU when CFS returns (with the fixes disabled it took 99 of 100 ticks; with them 50/50).
+3. **fifo** — dispatch order equals readiness order; no process preempted once running.
+4. **nice** — range checks, inheritance, `renice`, `getpinfo`.
+5. **slices** — for four (latency, min_granularity) settings, the measured number of preemptions matches the slice formula of §3.3 (within 35 %).
+6. **trace** — runs and stops alternate on every CPU, time is monotonic, exits and sleeps are recorded, nothing dropped.
+7. **scan** — every CFS pick (with mixed nice values, sleeps and a renice) equals the linear-scan choice.
 
-**Workloads** (`schedbench`): CPU jobs burn a calibrated number of ticks of
-work. I/O jobs repeat 15 times: work for ¼ tick, then `sleep(2)`.
+---
 
-* `cpu`: one 100-tick job followed by four 20-tick jobs, arriving in that order
-* `io`: four I/O jobs
-* `mix`: two 60-tick CPU jobs and two I/O jobs
+## 7. Evaluation
 
-### 6.2 Results
+### 7.1 Method
 
-**cpu** (long job first)
+Under plain QEMU emulation the guest's speed follows host load (the same job
+measured 87–132 ticks across runs). QEMU's `-icount shift=3,sleep=off` ties
+guest time to instructions executed, which makes results **deterministic**:
+repeated runs give identical numbers. All results below come from
+`make test-full` (equivalently `make qemu-bench CPUS=1`), 1 CPU, release
+kernel, default tunables (`sched_latency` 6, `min_granularity` 1). Times are
+in ticks. Raw output: `docs/schedbench.txt`, `docs/schedoverhead.txt`.
 
-| Scheduler | Avg turnaround | Avg waiting | Avg response | Makespan |
-|---|---|---|---|---|
-| RR | 119.6 | 78.4 | 7.4 | 190 |
-| FIFO | 146.4 | 108.6 | **110.0** | 189 |
-| CFS | 118.4 | 76.4 | 6.2 | 190 |
+Workloads (`schedbench`): CPU jobs burn a calibrated number of ticks; I/O
+jobs repeat 15× { ¼ tick of work, `sleep(2)` }.
+`cpu` = one 100-tick job then four 20-tick jobs; `io` = four I/O jobs;
+`mix` = two 60-tick CPU jobs + two I/O jobs.
 
-**io**
+### 7.2 Turnaround, waiting and response time
 
-| Scheduler | Avg turnaround | Avg waiting | Avg response | Makespan |
-|---|---|---|---|---|
-| RR | 32.5 | 0.7 | 2.5 | 37 |
-| FIFO | 34.5 | 2.7 | 4.0 | 37 |
-| CFS | 32.5 | 0.7 | 2.5 | 37 |
-
-**mix** (2 CPU-bound + 2 I/O-bound)
-
-| Scheduler | Avg turnaround | Avg waiting | Avg response | Makespan | I/O jobs' turnaround |
+| Workload | Scheduler | Avg turnaround | Avg waiting | Avg response | Makespan |
 |---|---|---|---|---|---|
-| RR | 85.7 | 42.0 | 5.7 | 136 | 40, 38 |
-| FIFO | 125.2 | 78.2 | 79.5 | 158 | 155, 154 |
-| CFS | 85.7 | **34.5** | 4.2 | 136 | **39, 34** (waiting 2, 0) |
+| cpu | RR | 119.8 | 78.4 | 7.4 | 191 |
+| cpu | FIFO | 147.0 | 109.0 | **110.4** | 190 |
+| cpu | CFS | **116.2** | **73.6** | 7.4 | 191 |
+| io | RR | 32.5 | 0.7 | 2.5 | 37 |
+| io | FIFO | 34.5 | 2.7 | 4.0 | 37 |
+| io | CFS | 33.0 | 2.2 | 2.7 | 38 |
+| mix | RR | 85.7 | 42.0 | 5.7 | 136 |
+| mix | FIFO | 125.5 | 78.5 | 79.7 | 158 |
+| mix | CFS | 86.7 | 42.2 | 6.0 | 136 |
 
-**nice** (CFS, three CPU-bound processes for 300 ticks)
+### 7.3 Nice values (CFS, three CPU-bound processes, 300 ticks)
 
-| Nice | Weight | CPU ticks | Share | Expected (weight / total weight) |
+| Nice | Weight | CPU ticks | Share | Expected = weight / Σweights |
 |---|---|---|---|---|
-| −5 | 3121 | 207 | 69.9 % | 69.6 % |
-| 0 | 1024 | 67 | 22.6 % | 22.8 % |
-| 5 | 335 | 22 | 7.4 % | 7.4 % |
+| −5 | 3121 | 206 | 69.5 % | 69.6 % |
+| 0 | 1024 | 68 | 22.9 % | 22.8 % |
+| +5 | 335 | 22 | 7.4 % | 7.4 % |
 
-### 6.3 Discussion
+### 7.4 Time slices (`schedtest` test 5)
 
-* **FIFO shows the convoy effect.** Short jobs stuck behind the 100-tick job
-  wait for all of it, so average response is ~110 ticks against ~7 for the
-  preemptive schedulers. In `mix`, the I/O jobs wait behind both CPU jobs
-  (turnaround ~155 against ~35). FIFO has the lowest overhead: a job runs
-  without interruption once started, as job 0's waiting time of 6 shows.
-* **RR and CFS behave the same for equal-nice CPU-bound jobs.** With a 1-tick
-  slice, both rotate fairly between processes with equal weight.
-* **CFS helps interactive and I/O-bound processes.** A process that sleeps
-  accumulates little `vruntime`, so when it wakes it is at or near the left of
-  the tree and runs almost immediately. In `mix`, CFS's I/O jobs waited 0–2
-  ticks in total, against 17–19 under RR, where they queue behind the CPU hogs
-  every time they wake.
-* **Nice is proportional.** Measured CPU shares are within 0.3 percentage
-  points of the weight ratios.
-* **Makespan is about the same for all three** when the total work is the same:
-  scheduling changes *who* waits, not how much work there is to do.
+Preemptions while 2 CPU-bound processes per CPU run for 60 ticks, measured
+vs. predicted by the slice formula of §3.3:
 
-### 6.4 Tests
+| sched_latency | min_granularity | 1 CPU: slice → predicted / measured | 4 CPUs: slice → predicted / measured |
+|---|---|---|---|
+| 24 | 1 | 12 → 5 / 5 | 3 → 80 / 76 |
+| 1 | 1 | 1 → 60 / 60 | 1 → 240 / 232 |
+| 4 | 1 | 2 → 30 / 30 | 1 → 240 / 236 |
+| 4 | 4 | 4 → 15 / 14 | 4 → 60 / 58 |
 
-* `schedtest`: **all checks pass** on 1 CPU and on 2 CPUs. It covers 8
-  scheduler switches while processes are running, fairness after switching back
-  into CFS, FIFO dispatch order and non-preemption, and nice validation,
-  inheritance and `renice`.
-* xv6 `usertests`: **ALL TESTS PASSED** under CFS (2 CPUs) and RR (1 CPU).
-  Under FIFO, `usertests`' `preempt` test cannot finish by design: it spins
-  three children forever and expects the parent to be preempted back in to kill
-  them.
+### 7.5 Cost of a scheduling decision (`schedoverhead`)
+
+Average TSC cycles per operation with N CPU-bound processes. "CFS scan" is
+what a CFS pick would cost without the tree — a linear scan of the process
+table for the smallest `vruntime` — measured on the same picks (and checked
+to agree with the tree every time).
+
+| N | RR pick | RR enqueue | CFS pick | CFS enqueue | CFS scan | scan / tree pick |
+|---|---|---|---|---|---|---|
+| 1 | 180 | 224 | 1035 | 963 | 10404 | 10.0× |
+| 8 | 176 | 224 | 1142 | 2172 | 11228 | 9.8× |
+| 32 | 176 | 224 | 1364 | 3410 | 13670 | 10.0× |
+| 128 | 176 | 224 | 1453 | 4881 | 21021 | 14.4× |
+| 240 | 176 | 224 | 1479 | 5435 | 28732 | **19.4×** |
+
+RR/FIFO operations are constant-time list operations. The CFS pick grows
+only from 1035 to 1479 cycles over a 240× increase in N (logarithmic), and
+insertion (with rebalancing) from 963 to 5435, while the linear scan grows
+with the table and reaches 19× the tree's pick cost. The scan has a high
+floor even at N = 1 because it must visit all `NPROC` = 256 slots.
+
+### 7.6 Gantt charts (`tools/gantt.py`, the `cpu` workload, 1 CPU)
+
+FIFO — each job runs once, start to finish (the convoy behind the 100-tick job is visible):
+
+![FIFO](docs/gantt-fifo.svg)
+
+Round Robin — 1-tick quanta, strict rotation:
+
+![RR](docs/gantt-rr.svg)
+
+CFS — slices of `sched_latency / nr_running` ticks; once the short jobs
+finish, the long job runs uninterrupted (no one is waiting):
+
+![CFS](docs/gantt-cfs.svg)
+
+Inside xv6 the same is available as text: `schedtrace schedbench cpu fifo`.
+
+### 7.7 Discussion
+
+* **FIFO shows the convoy effect**: the four short jobs wait for the whole
+  100-tick job, so average response is 110 ticks vs. ~7 for the preemptive
+  schedulers, and in `mix` the I/O jobs wait behind both CPU jobs. FIFO also
+  has the fewest context switches (one run per job in the Gantt chart).
+* **RR and CFS are within 3 % of each other on `cpu`** (turnaround 119.8
+  vs. 116.2). With five equal-weight jobs and `sched_latency` 6, each CFS
+  slice is 6/5 → 1 tick (the CFS Gantt chart shows an average run of about
+  1.1 ticks), so for equal weights CFS behaves like RR. CFS's slices only
+  become longer than RR's quantum when fewer processes compete or the
+  latency is raised (§7.4).
+* **Equal-weight fairness**: on `cpu` and `mix`, RR and CFS finish the same
+  work in the same makespan; scheduling changes *who* waits, not how much
+  total work there is.
+* **I/O latency under CFS depends on the slice length**: this CFS has no
+  wakeup preemption (§8), so a woken I/O process waits for the running CPU
+  job's slice to end. Measured on `mix` under CFS:
+
+  | `sched_latency` | I/O jobs: waiting | I/O jobs: turnaround | avg turnaround (all) |
+  |---|---|---|---|
+  | 1 | 0–1 | 35–38 | 85.7 |
+  | 6 (default) | 15–16 | 36–42 | 86.7 |
+  | 24 | 87–88 | 103–105 | 119.5 |
+
+  A short latency gives interactive/I/O processes low latency at the price
+  of more context switches (§7.4); a long one does the opposite. At the
+  default, the I/O jobs wait about as long as under RR.
+* **Nice is proportional**: measured shares are within 0.3 percentage
+  points of the weight ratio.
+* **Slices follow the formula** within a few percent on 1 and 4 CPUs.
+* **The red-black tree pays off as N grows**: O(log n) picks stay under
+  1500 cycles while the scan it replaces reaches ~29 000.
 
 ---
 
-## 7. Simplifications and limitations
+## 8. Simplifications and limitations
 
 Compared with Linux CFS:
+* **Tick-granular slices**, and no wakeup preemption or sleeper credit: a
+  woken process waits for the running one's slice to end.
+* **One global run queue** shared by all CPUs under `ptable.lock`; Linux has
+  per-CPU run queues with load balancing. On SMP, `min_vruntime` ignores
+  processes running on other CPUs.
+* No group scheduling (cgroups).
 
-* **Time slice is one tick.** A running process is preempted every tick (about
-  10 ms). Linux instead computes a slice from `sched_latency` and
-  `min_granularity`, and preempts on wakeup when the woken task is sufficiently
-  behind.
-* **One global run queue.** All CPUs share one tree under `ptable.lock`. Linux
-  keeps one run queue per CPU and balances load between them. On SMP,
-  `min_vruntime` follows the tree's leftmost node and ignores processes running
-  on other CPUs, so it can be slightly ahead of their `vruntime`.
-* **No sleeper credit.** Linux places a waking task slightly *below*
-  `min_vruntime` (by half the latency period). Here it is placed exactly at it.
-* **No group scheduling** (cgroups) or autogroup.
-
-Other limitations:
-
-* **FIFO can lock out the shell.** With FIFO active and as many CPU-bound
-  processes as CPUs, nothing else runs, including the shell you would use to
-  switch back, until one of them blocks or exits. This is inherent to a
-  non-preemptive policy; Linux limits it with RT throttling.
-* **Switching into CFS discards vruntime history.** This is deliberate (section
-  3.3): each CFS period starts fair.
-* **No permission checks.** Any process may change the scheduler or renice any
-  other process; xv6 has no users.
-* **Assumes a constant-rate TSC**, which is true for QEMU and for modern x86. A
-  single uninterrupted run longer than about 2^42 cycles (roughly 20 minutes at
-  3 GHz, possible only under FIFO) could overflow the CFS charge.
-* Wait and sleep times are sampled once per tick, so they are accurate to
-  ±1 tick. CPU time is exact.
+Other:
+* **FIFO can lock out the shell**: with FIFO active and as many CPU-bound
+  processes as CPUs, nothing else runs until one blocks or exits (inherent to
+  a non-preemptive policy). `usertests`' `preempt` test cannot pass under FIFO
+  for the same reason, so the suite runs `usertests` under RR and CFS.
+* Switching into CFS deliberately discards `vruntime` history (§3.3).
+* No permission checks (xv6 has no users).
+* Assumes a constant-rate TSC (true for QEMU and modern x86).
+* Wait / sleep times are sampled per tick (±1 tick); CPU time is exact.
 
 ---
 
-## 8. Bugs fixed during development
+## 9. Bugs found and fixed during development
 
-| Problem | Fix |
+| Problem | Found by | Fix |
+|---|---|---|
+| Kernel failed to link (`__udivdi3`, 64-bit division) | build | 32-bit fixed-point charge |
+| Negative nice added 0 to `vruntime` → starvation | code review | finer units (cycles × 2^16 factor) |
+| RR always picked the lowest slot → starvation | code review | real RR queue |
+| Stale `vruntime` after switching back into CFS | `schedtest` 2 | reset on switch + `min_vruntime` placement |
+| FIFO ties by slot; FIFO preempted every tick | code review | FIFO queue; no timer preemption |
+| Tick-based charging let short runs go uncharged | code review | TSC accounting |
+| O(n) wakeup scan for `min_vruntime` | code review | `min_vruntime` from the tree |
+| Scheduler switched without the lock | code review | all scheduler state under `ptable.lock` |
+| Wait time counted every sleeper as waiting | `schedbench` | sample before `wakeup(&ticks)` |
+| Only one CPU booted on QEMU 8 | `schedctl get` showed 1 CPU | `-smp N,sockets=N` |
+| CFS pick cost included the cross-check scan | `schedoverhead` | subtract scan time |
+| Red-red check in `rb_verify` was never exercised by the tests | mutation test | exact red-red-only self-test |
+| `-Werror` dropped for GCC 13 | build | `noreturn` in `sh.c`, `-Werror` restored |
+
+---
+
+## 10. Files
+
+| File | Contents |
 |---|---|
-| Kernel failed to link: `undefined reference to __udivdi3` (64-bit division) | fixed-point charge using 32-bit division (`cfs_charge`) |
-| Negative nice values added 0 to vruntime, starving other processes | finer units: cycles × 2^16 fixed-point factor |
-| RR always picked the lowest slot, starving others | rotating `rr_next` cursor |
-| Stale vruntime when switching back into CFS | `cfs_reset_vruntime()` and placement at `min_vruntime` |
-| FIFO tie-breaking by slot; FIFO still preempted every tick | `fifo_seq` ordering; no timer yield under FIFO |
-| Tick-based charging let short-running processes go uncharged | TSC-based run time |
-| Finding the minimum `vruntime` scanned the whole process table on every wakeup | `min_vruntime` maintained from the tree |
-| Scheduler changed without holding `ptable.lock` | `set_scheduler()` / `get_scheduler()` take the lock |
-| `-Werror` removed to work around GCC 13's `-Winfinite-recursion` in `sh.c` | `noreturn` declarations; `-Werror` restored |
+| `sched.c` | scheduler core: class table, switching/migration, accounting, ticks, stats, trace, tunables, debug checks |
+| `sched_class.h` | the scheduling-class interface |
+| `sched_rr.c` | RR and FIFO classes |
+| `sched_cfs.c` | CFS class |
+| `rbtree.c`, `rbtree.h` | generic red-black tree + verifier |
+| `sched.h` | constants and structures shared with user programs |
+| `proc.c`, `proc.h` | process lifecycle calling into the core; per-process scheduling fields |
+| `trap.c` | timer → `preempt_tick()`; per-tick statistics |
+| `x86.h` | `rdtsc()` |
+| `sysproc.c`, `syscall.[ch]`, `usys.S`, `user.h`, `defs.h` | system calls 22–32 |
+| `schedctl.c`, `nice.c`, `renice.c`, `ps.c`, `schedtrace.c` | tools |
+| `schedtest.c`, `schedstress.c`, `schedbench.c`, `schedoverhead.c` | tests and benchmarks |
+| `tests/rbtree_test.c`, `tests/rbtree_mutation.sh` | host unit and mutation tests |
+| `tools/xv6test.py`, `tools/gantt.py` | test harness; SVG Gantt charts |
+| `.github/workflows/scheduler-tests.yml` | CI |
+| `docs/` | Gantt charts and benchmark output from the last full run |
