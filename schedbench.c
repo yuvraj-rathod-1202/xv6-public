@@ -191,7 +191,7 @@ run_workload(int sched, struct job *jobs, int n, int verbose)
   }
 
   if(verbose)
-    printf(1, "  job  kind  amount  turnaround   waiting  response   cpu time\n");
+    printf(1, "  pid  kind  amount  turnaround   waiting  response   cpu time\n");
   for(i = 0; i < n; i++){
     struct waitinfo *w = &res[i].wi;
     int t = w->etime - w->ctime;
@@ -204,7 +204,9 @@ run_workload(int sched, struct job *jobs, int n, int verbose)
     if(w->etime > last_e)
       last_e = w->etime;
     if(verbose){
-      printf(1, "  %d    %s  ", i, jobs[i].kind == CPU ? "cpu" : "io ");
+      printf(1, "  ");
+      print_int(res[i].pid, 3); 
+      printf(1, "  %s  ", jobs[i].kind == CPU ? "cpu" : "io ");
       print_int(jobs[i].amount, 6);
       print_int(t, 10);
       print_int(w->wtime, 8);
