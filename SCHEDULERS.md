@@ -136,7 +136,7 @@ yield/sleep/exit: sched() ──> sched_stop(p): exec_time += cycles;
 
 1. make the new class current and call its `switched_to()`;
 2. **migrate**: repeatedly `old->pick_next()` and `new->enqueue(p, 1)` until the
-   old queue is empty — every queued process moves exactly once, in the old
+   old queue is empty - every queued process moves exactly once, in the old
    class's priority order;
 3. processes that are *running* at that moment finish their current run and
    are handed to the new class by `sched_stop()` when they stop.
@@ -149,7 +149,7 @@ run-queue operation**:
 
 * `p->on_rq == 1` ⇔ `p->state == RUNNABLE` ⇔ `p` is in the active class's queue;
 * the number of queued processes equals the class's own count;
-* the class structure is intact — list links/length for RR and FIFO; for CFS
+* the class structure is intact - list links/length for RR and FIFO; for CFS
   every red-black property (`rb_verify`), the cached queued load, and the
   running-process load used for time slices;
 * every CFS pick equals the minimum found by a linear scan of the process table.
@@ -192,7 +192,7 @@ slice(p) = max( period × weight(p) / W , min_granularity )      (rounded, in ti
 ```
 
 `tick(p)` counts the ticks of the current run and preempts once it reaches
-`slice(p)` — but only if another process is waiting. Defaults:
+`slice(p)` - but only if another process is waiting. Defaults:
 `sched_latency` = 6 ticks, `min_granularity` = 1 tick; change them with
 `schedctl tune`. Because the timer tick is the only preemption point, slices
 are whole ticks.
@@ -257,7 +257,7 @@ applies from the process's next charge / slice computation.
 | Layer | What | How to run |
 |---|---|---|
 | 6.1 Unit (host) | `rbtree.c` vs. a reference implementation: 1.8 M random insert / erase / pop-min / re-key operations, each followed by full verification; height bound; checker self-test | `make rbtree-test` |
-| 6.2 Mutation (host) | 12 deliberately broken copies of `rbtree.c` (missed recolour, missing fixup, broken rotation, wrong descent, disabled checks, …) — the unit test must fail every one | `make rbtree-mutation` |
+| 6.2 Mutation (host) | 12 deliberately broken copies of `rbtree.c` (missed recolour, missing fixup, broken rotation, wrong descent, disabled checks, …) - the unit test must fail every one | `make rbtree-mutation` |
 | 6.3 In-kernel invariants | `SCHED_DEBUG` kernel verifies §2.4 after every enqueue, dispatch, stop and switch, and cross-checks every CFS pick against a linear scan | `make SCHED_DEBUG=1 …` |
 | 6.4 Functional | `schedtest`: 7 tests (below) | `schedtest` |
 | 6.5 Stress | `schedstress`: randomised fork/exit/sleep/nice/kill and random scheduler switches and tunable changes, then checks nothing leaked or got lost | `schedstress [ticks] [seed]` |
@@ -267,13 +267,13 @@ applies from the process's next charge / slice computation.
 
 `schedtest`:
 
-1. **switch** — 8 scheduler switches while 4 CPU-bound processes run; every switch takes effect, all processes finish; invalid ids rejected.
-2. **cfsfair** — a process that slept through a CFS period and woke under RR must not monopolise the CPU when CFS returns (with the fixes disabled it took 99 of 100 ticks; with them 50/50).
-3. **fifo** — dispatch order equals readiness order; no process preempted once running.
-4. **nice** — range checks, inheritance, `renice`, `getpinfo`.
-5. **slices** — for four (latency, min_granularity) settings, the measured number of preemptions matches the slice formula of §3.3 (within 35 %).
-6. **trace** — runs and stops alternate on every CPU, time is monotonic, exits and sleeps are recorded, nothing dropped.
-7. **scan** — every CFS pick (with mixed nice values, sleeps and a renice) equals the linear-scan choice.
+1. **switch** - 8 scheduler switches while 4 CPU-bound processes run; every switch takes effect, all processes finish; invalid ids rejected.
+2. **cfsfair** - a process that slept through a CFS period and woke under RR must not monopolise the CPU when CFS returns (with the fixes disabled it took 99 of 100 ticks; with them 50/50).
+3. **fifo** - dispatch order equals readiness order; no process preempted once running.
+4. **nice** - range checks, inheritance, `renice`, `getpinfo`.
+5. **slices** - for four (latency, min_granularity) settings, the measured number of preemptions matches the slice formula of §3.3 (within 35 %).
+6. **trace** - runs and stops alternate on every CPU, time is monotonic, exits and sleeps are recorded, nothing dropped.
+7. **scan** - every CFS pick (with mixed nice values, sleeps and a renice) equals the linear-scan choice.
 
 ---
 
@@ -282,7 +282,7 @@ applies from the process's next charge / slice computation.
 ### 7.1 Method
 
 Under plain QEMU emulation the guest's speed follows host load (the same job
-measured 87–132 ticks across runs). QEMU's `-icount shift=3,sleep=off` ties
+measured 87-132 ticks across runs). QEMU's `-icount shift=3,sleep=off` ties
 guest time to instructions executed, which makes results **deterministic**:
 repeated runs give identical numbers. All results below come from
 `make test-full` (equivalently `make qemu-bench CPUS=1`), 1 CPU, release
@@ -331,8 +331,8 @@ vs. predicted by the slice formula of §3.3:
 ### 7.5 Cost of a scheduling decision (`schedoverhead`)
 
 Average TSC cycles per operation with N CPU-bound processes. "CFS scan" is
-what a CFS pick would cost without the tree — a linear scan of the process
-table for the smallest `vruntime` — measured on the same picks (and checked
+what a CFS pick would cost without the tree - a linear scan of the process
+table for the smallest `vruntime` - measured on the same picks (and checked
 to agree with the tree every time).
 
 | N | RR pick | RR enqueue | CFS pick | CFS enqueue | CFS scan | scan / tree pick |
@@ -351,15 +351,15 @@ floor even at N = 1 because it must visit all `NPROC` = 256 slots.
 
 ### 7.6 Gantt charts (`tools/gantt.py`, the `cpu` workload, 1 CPU)
 
-FIFO — each job runs once, start to finish (the convoy behind the 100-tick job is visible):
+FIFO - each job runs once, start to finish (the convoy behind the 100-tick job is visible):
 
 ![FIFO](docs/gantt-fifo.svg)
 
-Round Robin — 1-tick quanta, strict rotation:
+Round Robin - 1-tick quanta, strict rotation:
 
 ![RR](docs/gantt-rr.svg)
 
-CFS — slices of `sched_latency / nr_running` ticks; once the short jobs
+CFS - slices of `sched_latency / nr_running` ticks; once the short jobs
 finish, the long job runs uninterrupted (no one is waiting):
 
 ![CFS](docs/gantt-cfs.svg)
@@ -387,9 +387,9 @@ Inside xv6 the same is available as text: `schedtrace schedbench cpu fifo`.
 
   | `sched_latency` | I/O jobs: waiting | I/O jobs: turnaround | avg turnaround (all) |
   |---|---|---|---|
-  | 1 | 0–1 | 35–38 | 85.7 |
-  | 6 (default) | 15–16 | 36–42 | 86.7 |
-  | 24 | 87–88 | 103–105 | 119.5 |
+  | 1 | 0-1 | 35-38 | 85.7 |
+  | 6 (default) | 15-16 | 36-42 | 86.7 |
+  | 24 | 87-88 | 103-105 | 119.5 |
 
   A short latency gives interactive/I/O processes low latency at the price
   of more context switches (§7.4); a long one does the opposite. At the
@@ -424,27 +424,7 @@ Other:
 
 ---
 
-## 9. Bugs found and fixed during development
-
-| Problem | Found by | Fix |
-|---|---|---|
-| Kernel failed to link (`__udivdi3`, 64-bit division) | build | 32-bit fixed-point charge |
-| Negative nice added 0 to `vruntime` → starvation | code review | finer units (cycles × 2^16 factor) |
-| RR always picked the lowest slot → starvation | code review | real RR queue |
-| Stale `vruntime` after switching back into CFS | `schedtest` 2 | reset on switch + `min_vruntime` placement |
-| FIFO ties by slot; FIFO preempted every tick | code review | FIFO queue; no timer preemption |
-| Tick-based charging let short runs go uncharged | code review | TSC accounting |
-| O(n) wakeup scan for `min_vruntime` | code review | `min_vruntime` from the tree |
-| Scheduler switched without the lock | code review | all scheduler state under `ptable.lock` |
-| Wait time counted every sleeper as waiting | `schedbench` | sample before `wakeup(&ticks)` |
-| Only one CPU booted on QEMU 8 | `schedctl get` showed 1 CPU | `-smp N,sockets=N` |
-| CFS pick cost included the cross-check scan | `schedoverhead` | subtract scan time |
-| Red-red check in `rb_verify` was never exercised by the tests | mutation test | exact red-red-only self-test |
-| `-Werror` dropped for GCC 13 | build | `noreturn` in `sh.c`, `-Werror` restored |
-
----
-
-## 10. Files
+## 9. Files
 
 | File | Contents |
 |---|---|
@@ -457,7 +437,7 @@ Other:
 | `proc.c`, `proc.h` | process lifecycle calling into the core; per-process scheduling fields |
 | `trap.c` | timer → `preempt_tick()`; per-tick statistics |
 | `x86.h` | `rdtsc()` |
-| `sysproc.c`, `syscall.[ch]`, `usys.S`, `user.h`, `defs.h` | system calls 22–32 |
+| `sysproc.c`, `syscall.[ch]`, `usys.S`, `user.h`, `defs.h` | system calls 22-32 |
 | `schedctl.c`, `nice.c`, `renice.c`, `ps.c`, `schedtrace.c` | tools |
 | `schedtest.c`, `schedstress.c`, `schedbench.c`, `schedoverhead.c` | tests and benchmarks |
 | `tests/rbtree_test.c`, `tests/rbtree_mutation.sh` | host unit and mutation tests |

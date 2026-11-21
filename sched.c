@@ -93,11 +93,17 @@ sched_clock_tick(void)
 static struct trace_event trace_buf[TRACE_MAX];
 static int trace_on, trace_n, trace_dropped;
 static uint64 trace_t0;
+// Cycles-per-tick rate frozen at TRACE_START. The live estimate changes on
+// every tick; converting with it could make a later event on the same CPU
+// get a smaller timestamp. With one fixed rate, a CPU's timestamps follow
+// its cycle counter and never go backwards.
+static uint trace_cpt;
 
 static void
 trace(int type, struct proc *p, int arg)
 {
   struct trace_event *e;
+  uint64 now;
 
   if(!trace_on)
     return;
@@ -106,9 +112,12 @@ trace(int type, struct proc *p, int arg)
     return;
   }
   e = &trace_buf[trace_n++];
-  // time in 1/100 tick since TRACE_START
-  e->t = cycles_per_tick ?
-    (uint)div64_32((sched_clock() - trace_t0) * 100, cycles_per_tick) : 0;
+  // Time in 1/100 tick since TRACE_START. Another CPU's counter can be a
+  // little behind the one that started the trace: clamp that to 0 rather
+  // than let the unsigned subtraction wrap around.
+  now = sched_clock();
+  e->t = (trace_cpt && now > trace_t0) ?
+    (uint)div64_32((now - trace_t0) * 100, trace_cpt) : 0;
   e->cpu = cpuid();
   e->type = type;
   e->arg = arg;
@@ -130,6 +139,7 @@ sched_tracectl(int cmd)
     trace_n = 0;
     trace_dropped = 0;
     trace_t0 = sched_clock();
+    trace_cpt = cycles_per_tick;
     trace_on = 1;
     trace(TR_SCHED, 0, policy);   // record the policy in force at t = 0
     return 0;
